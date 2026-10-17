@@ -49,6 +49,7 @@ export function AuthProvider({ children }) {
   const login = (userData, tokenValue) => {
     const safeUser = userData ? {
       fullName: userData.fullName || userData.name || userData.username || 'User',
+      name: userData.fullName || userData.name || userData.username || 'User',
       email: userData.email || '',
       username: userData.username || '',
       role: userData.role || 'USER',
@@ -68,11 +69,12 @@ export function AuthProvider({ children }) {
 
   const updateUser = (userData) => {
     setUser((prev) => {
-      const safe = prev ? { ...prev, ...userData } : userData;
-      if (safe) {
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(safe));
-      }
-      return safe;
+      if (!userData) return prev;
+      const safe = prev ? { ...prev, ...userData } : { ...userData };
+      if (safe.fullName && !safe.name) safe.name = safe.fullName;
+      if (safe.name && !safe.fullName) safe.fullName = safe.name;
+      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(safe));
+      return { ...safe };
     });
   };
 

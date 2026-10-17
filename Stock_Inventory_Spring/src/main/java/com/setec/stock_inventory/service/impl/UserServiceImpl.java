@@ -1,6 +1,7 @@
 package com.setec.stock_inventory.service.impl;
 
 import com.setec.stock_inventory.config.CloudinaryService;
+import com.setec.stock_inventory.dto.Request.ChangePasswordRequestDto;
 import com.setec.stock_inventory.dto.Request.UserProfileUpdateRequestDto;
 import com.setec.stock_inventory.dto.Request.UserRequestDto;
 import com.setec.stock_inventory.dto.Response.UserResponseDto;
@@ -157,9 +158,37 @@ public class UserServiceImpl implements UserService {
         if (request.getPhone() != null) {
             user.setPhone(request.getPhone().trim());
         }
+        if (request.getAddress() != null) {
+            user.setAddress(request.getAddress().trim());
+        }
 
         User saved = userRepository.save(user);
         return UserMapper.toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public void changeCurrentUserPassword(ChangePasswordRequestDto request) {
+        User user = getCurrentAuthenticatedUser();
+
+        if (request.getCurrentPassword() == null || request.getCurrentPassword().isBlank()) {
+            throw new BadRequestException("Current password is required");
+        }
+        if (request.getNewPassword() == null || request.getNewPassword().isBlank()) {
+            throw new BadRequestException("New password is required");
+        }
+        if (request.getNewPassword().length() < 4 || request.getNewPassword().length() > 100) {
+            throw new BadRequestException("New password must be between 4 and 100 characters");
+        }
+        if (request.getNewPassword().equals(request.getCurrentPassword())) {
+            throw new BadRequestException("New password cannot be the same as current password");
+        }
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new BadRequestException("Current password is incorrect");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
     }
 
     @Override

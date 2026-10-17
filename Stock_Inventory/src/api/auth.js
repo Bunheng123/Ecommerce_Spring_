@@ -30,12 +30,22 @@ export async function getCurrentUser() {
 }
 
 /**
- * Update current authenticated user's profile details (fullName, phone)
- * @param {{ fullName?: string, phone?: string }} data
+ * Update current authenticated user's profile details (fullName, phone, address)
+ * @param {{ fullName?: string, phone?: string, address?: string }} data
  * @returns {Promise<any>} Updated user profile
  */
 export async function updateProfile(data) {
   const response = await apiClient.put('/users/me', data);
+  return response.data?.data ?? response.data;
+}
+
+/**
+ * Change current authenticated user's password
+ * @param {{ currentPassword: string, newPassword: string }} data
+ * @returns {Promise<any>}
+ */
+export async function changePassword(data) {
+  const response = await apiClient.put('/users/me/password', data);
   return response.data?.data ?? response.data;
 }
 

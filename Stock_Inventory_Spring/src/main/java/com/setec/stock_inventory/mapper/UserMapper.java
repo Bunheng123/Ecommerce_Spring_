@@ -22,6 +22,7 @@ public class UserMapper {
                 .profileImageUrl(user.getProfileImageUrl())
                 .profilePublicId(user.getProfilePublicId())
                 .phone(user.getPhone())
+                .address(user.getAddress())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();

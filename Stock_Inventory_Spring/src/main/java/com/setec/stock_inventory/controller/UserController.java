@@ -1,6 +1,7 @@
 package com.setec.stock_inventory.controller;
 
 import com.setec.stock_inventory.dto.ApiResponse;
+import com.setec.stock_inventory.dto.Request.ChangePasswordRequestDto;
 import com.setec.stock_inventory.dto.Request.UserProfileUpdateRequestDto;
 import com.setec.stock_inventory.dto.Request.UserRequestDto;
 import com.setec.stock_inventory.dto.Response.UserResponseDto;
@@ -42,6 +43,13 @@ public class UserController {
             @RequestParam("file") MultipartFile file) {
         UserResponseDto updatedProfile = userService.updateCurrentUserProfilePicture(file);
         return ResponseEntity.ok(ApiResponse.success("Profile picture updated successfully", updatedProfile));
+    }
+
+    @PutMapping("/me/password")
+    public ResponseEntity<ApiResponse<Void>> changeCurrentUserPassword(
+            @Valid @RequestBody ChangePasswordRequestDto request) {
+        userService.changeCurrentUserPassword(request);
+        return ResponseEntity.ok(ApiResponse.success("Password changed successfully", null));
     }
 
     // --- Administrative Endpoints (ADMIN only) ---

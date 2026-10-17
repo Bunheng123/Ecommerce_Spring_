@@ -20,6 +20,7 @@ public class UserResponseDto {
     private String profileImageUrl;
     private String profilePublicId;
     private String phone;
+    private String address;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

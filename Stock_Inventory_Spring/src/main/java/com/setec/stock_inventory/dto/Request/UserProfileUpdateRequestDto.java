@@ -17,4 +17,7 @@ public class UserProfileUpdateRequestDto {
 
     @Size(max = 20, message = "Phone must be less than 20 characters")
     private String phone;
+
+    @Size(max = 255, message = "Address must be less than 255 characters")
+    private String address;
 }

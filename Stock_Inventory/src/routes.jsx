@@ -8,6 +8,7 @@ import OrderHistoryPage from './pages/customer/OrderHistoryPage';
 import OrderDetailPage from './pages/customer/OrderDetailPage';
 import LoginPage from './pages/customer/LoginPage';
 import RegisterPage from './pages/customer/RegisterPage';
+import ProfilePage from './pages/customer/ProfilePage';
 import { useCart } from './context/CartContext';
 
 function CartRedirect() {
@@ -32,7 +33,7 @@ export default function AppRoutes() {
       <Route path="/orders/:id" element={<OrderDetailPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/profile" element={<Navigate to="/" replace />} />
+      <Route path="/profile" element={<ProfilePage />} />
     </Routes>
   );
 }

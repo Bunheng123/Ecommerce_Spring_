@@ -1,5 +1,6 @@
 package com.setec.stock_inventory.service;
 
+import com.setec.stock_inventory.dto.Request.ChangePasswordRequestDto;
 import com.setec.stock_inventory.dto.Request.UserProfileUpdateRequestDto;
 import com.setec.stock_inventory.dto.Request.UserRequestDto;
 import com.setec.stock_inventory.dto.Response.UserResponseDto;
@@ -22,6 +23,8 @@ public interface UserService {
     UserResponseDto getCurrentUserProfile();
 
     UserResponseDto updateCurrentUserProfile(UserProfileUpdateRequestDto request);
+
+    void changeCurrentUserPassword(ChangePasswordRequestDto request);
 
     UserResponseDto updateCurrentUserProfilePicture(MultipartFile file);
 

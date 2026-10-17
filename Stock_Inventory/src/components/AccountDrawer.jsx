@@ -14,6 +14,7 @@ export default function AccountDrawer({ isOpen, onClose }) {
   const [isEditing, setIsEditing] = useState(false);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [profileImageUrl, setProfileImageUrl] = useState('');
 
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -56,6 +57,7 @@ export default function AccountDrawer({ isOpen, onClose }) {
       if (user) {
         setFullName(user.fullName || '');
         setPhone(user.phone || '');
+        setAddress(user.address || '');
         setProfileImageUrl(user.profileImageUrl || '');
       }
 
@@ -65,6 +67,7 @@ export default function AccountDrawer({ isOpen, onClose }) {
             if (freshUser) {
               setFullName(freshUser.fullName || '');
               setPhone(freshUser.phone || '');
+              setAddress(freshUser.address || '');
               setProfileImageUrl(freshUser.profileImageUrl || '');
               updateUser(freshUser);
             }
@@ -86,6 +89,7 @@ export default function AccountDrawer({ isOpen, onClose }) {
     if (!isEditing && user) {
       setFullName(user.fullName || '');
       setPhone(user.phone || '');
+      setAddress(user.address || '');
       setProfileImageUrl(user.profileImageUrl || '');
     }
   }, [user, isEditing]);
@@ -121,6 +125,7 @@ export default function AccountDrawer({ isOpen, onClose }) {
     setIsEditing(false);
     setFullName(user?.fullName || '');
     setPhone(user?.phone || '');
+    setAddress(user?.address || '');
     setProfileImageUrl(user?.profileImageUrl || '');
     setErrorMsg('');
     setPhotoError('');
@@ -163,6 +168,7 @@ export default function AccountDrawer({ isOpen, onClose }) {
       const updated = await updateProfile({
         fullName: fullName.trim(),
         phone: phone.trim(),
+        address: address.trim(),
       });
 
       updateUser(updated);
@@ -370,6 +376,24 @@ export default function AccountDrawer({ isOpen, onClose }) {
               />
             </div>
 
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-ink mb-1.5">
+                Delivery Address
+              </label>
+              <textarea
+                rows={2}
+                disabled={!isEditing}
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder={isEditing ? 'e.g. Street 271, Phnom Penh' : 'Not set'}
+                className={`w-full rounded-xl px-3.5 py-2 text-xs font-semibold resize-none transition-all ${
+                  !isEditing
+                    ? 'bg-neutral-100/70 border border-line text-neutral-600 cursor-not-allowed select-none'
+                    : 'bg-[#F5F6FA] border border-line text-ink outline-none focus:border-ink focus:bg-white focus:ring-1 focus:ring-ink placeholder:text-muted'
+                }`}
+              />
+            </div>
+
             {successMsg && (
               <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-800 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
                 <span>✓</span>
@@ -431,7 +455,7 @@ export default function AccountDrawer({ isOpen, onClose }) {
             </div>
           </form>
 
-          {/* Navigation Links (My Profile removed!) */}
+          {/* Navigation Links */}
           <nav className="pt-3 border-t border-line space-y-1" aria-label="Account navigation">
             {(user?.role === 'ADMIN' || user?.role === 'STOCK') && (
               <Link
@@ -443,6 +467,15 @@ export default function AccountDrawer({ isOpen, onClose }) {
                 <span className="text-muted text-sm">&rarr;</span>
               </Link>
             )}
+
+            <Link
+              to="/profile"
+              onClick={onClose}
+              className="flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink hover:bg-neutral-100 rounded-lg transition-colors"
+            >
+              <span>My Profile</span>
+              <span className="text-muted text-sm">&rarr;</span>
+            </Link>
 
             <Link
               to="/orders"
@@ -458,7 +491,7 @@ export default function AccountDrawer({ isOpen, onClose }) {
               onClick={onClose}
               className="flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink hover:bg-neutral-100 rounded-lg transition-colors"
             >
-              <span>Storefront</span>
+              <span>Browse Catalog</span>
               <span className="text-muted text-sm">&rarr;</span>
             </Link>
           </nav>
