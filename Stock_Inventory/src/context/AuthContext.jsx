@@ -53,8 +53,13 @@ export function AuthProvider({ children }) {
       email: userData.email || '',
       username: userData.username || '',
       role: userData.role || 'USER',
+      phone: userData.phone || '',
       ...userData,
     } : null;
+
+    if (safeUser) {
+      delete safeUser.address;
+    }
 
     setUser(safeUser);
     setToken(tokenValue || null);
@@ -71,6 +76,7 @@ export function AuthProvider({ children }) {
     setUser((prev) => {
       if (!userData) return prev;
       const safe = prev ? { ...prev, ...userData } : { ...userData };
+      delete safe.address;
       if (safe.fullName && !safe.name) safe.name = safe.fullName;
       if (safe.name && !safe.fullName) safe.fullName = safe.name;
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(safe));
@@ -88,15 +94,17 @@ export function AuthProvider({ children }) {
   };
 
   // Development helper on window for manual verification
-  if (typeof window !== 'undefined') {
-    window.__auth = {
-      user,
-      token,
-      login,
-      updateUser,
-      logout,
-    };
-  }
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.__auth = {
+        user,
+        token,
+        login,
+        updateUser,
+        logout,
+      };
+    }
+  }, [user, token]);
 
   const value = {
     user,

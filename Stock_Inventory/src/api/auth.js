@@ -30,12 +30,15 @@ export async function getCurrentUser() {
 }
 
 /**
- * Update current authenticated user's profile details (fullName, phone, address)
- * @param {{ fullName?: string, phone?: string, address?: string }} data
+ * Update current authenticated user's profile details (fullName, phone)
+ * @param {{ fullName?: string, phone?: string }} data
  * @returns {Promise<any>} Updated user profile
  */
 export async function updateProfile(data) {
-  const response = await apiClient.put('/users/me', data);
+  const payload = {};
+  if (data?.fullName !== undefined) payload.fullName = data.fullName;
+  if (data?.phone !== undefined) payload.phone = data.phone;
+  const response = await apiClient.put('/users/me', payload);
   return response.data?.data ?? response.data;
 }
 

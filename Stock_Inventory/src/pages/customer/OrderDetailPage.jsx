@@ -4,17 +4,318 @@ import OrderReceipt, {
   canCancelOrder,
   getCancelDeadline,
   formatDeadlineDate,
+  formatOrderDate,
+  formatOrderStatus,
+  formatPaymentMethod,
 } from '../../components/OrderReceipt';
 import { getOrderById, cancelOrder } from '../../api/orders';
+import { Toast, ConfirmDialog, AlertDialog } from '../../admin/utils/swalConfig';
+
+/**
+ * Visual monochrome Order Status Stepper
+ * Driven by order status (PENDING, COMPLETED, CANCELLED), paymentStatus (UNPAID, PAID, REFUNDED), and orderDate.
+ */
+function OrderStatusStepper({ order }) {
+  const [now] = useState(() => Date.now());
+  if (!order) return null;
+  const statusUpper = String(order.status || '').toUpperCase();
+  const paymentUpper = String(order.paymentStatus || '').toUpperCase();
+  const isCancelled = statusUpper === 'CANCELLED';
+
+  if (isCancelled) {
+    let refundPill = 'UNPAID / VOIDED';
+    let refundText = 'This order was cancelled prior to payment settlement. No charges were incurred.';
+
+    if (paymentUpper === 'REFUNDED') {
+      refundPill = 'REFUNDED (< 2H)';
+      refundText = 'This order was cancelled within the 2-hour cancellation window. Payment has been refunded and item stock restored.';
+    } else if (paymentUpper === 'PAID') {
+      refundPill = 'PAID (NON-REFUNDABLE > 2H)';
+      refundText = 'This order was cancelled after the 2-hour cancellation window. Payment remains recorded and non-refundable.';
+    }
+
+    return (
+      <div className="border border-line bg-white p-6 md:p-8 shadow-surface mb-8 no-print">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-neutral-900 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+              ✕
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted block">
+                STATUS RESOLUTION
+              </span>
+              <h2 className="text-base sm:text-lg font-black uppercase tracking-tight text-ink">
+                ORDER CANCELLED
+              </h2>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2.5 py-1 border border-neutral-900 text-[10px] font-bold uppercase tracking-wider text-neutral-900 bg-neutral-50">
+              CANCELLED
+            </span>
+            <span className="px-2.5 py-1 border border-line text-[10px] font-bold uppercase tracking-wider text-muted bg-white">
+              {refundPill}
+            </span>
+          </div>
+        </div>
+
+        <p className="text-xs text-neutral-600 leading-relaxed font-medium">
+          {refundText}
+        </p>
+
+        {order.orderDate && (
+          <p className="text-[11px] text-muted font-mono mt-3">
+            Originally placed: {formatOrderDate(order.orderDate)}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // Active / Completed Stepper (PENDING or COMPLETED)
+  const paymentMethodUpper = String(order.paymentMethod || '').toUpperCase();
+  const isCod = paymentMethodUpper === 'CASH_ON_DELIVERY';
+  const isPaid = paymentUpper === 'PAID';
+
+  let elapsedHours = 0;
+  if (order.orderDate) {
+    const orderTime = new Date(order.orderDate).getTime();
+    if (!isNaN(orderTime)) {
+      elapsedHours = Math.max(0, (now - orderTime) / (1000 * 60 * 60));
+    }
+  }
+
+  const isCompleted = statusUpper === 'COMPLETED' || elapsedHours >= 48;
+  const isPending = statusUpper === 'PENDING' && !isCompleted;
+
+  let scooterPercent;
+  let tooltipText;
+  let showGreenDot;
+  let isPulsingGreen = false;
+
+  if (isCompleted) {
+    scooterPercent = 96;
+    tooltipText = 'DELIVERED • COMPLETED';
+    showGreenDot = true;
+    isPulsingGreen = false;
+  } else if (isPending && !isPaid && !isCod) {
+    scooterPercent = 33;
+    tooltipText = 'AWAITING PAYMENT • EST. 2 DAYS';
+    showGreenDot = false;
+  } else {
+    // In transit (PAID or COD)
+    const progressFraction = Math.min(Math.max(elapsedHours / 48, 0), 1);
+    scooterPercent = 62 + progressFraction * (90 - 62);
+    tooltipText =
+      elapsedHours < 24
+        ? 'IN TRANSIT • ARRIVING IN 2 DAYS'
+        : 'IN TRANSIT • ARRIVING IN 1 DAY';
+    showGreenDot = true;
+    isPulsingGreen = true;
+  }
+
+  const isStep2Done = isPaid || isCod || isCompleted;
+  const isStep3Done = isCompleted;
+
+  return (
+    <div className="border border-line bg-white p-6 md:p-8 shadow-surface mb-8 no-print">
+      <div className="flex items-center justify-between border-b border-line pb-4 mb-6">
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted block">
+            FULFILLMENT PROGRESSION
+          </span>
+          <h2 className="text-sm font-black uppercase tracking-wider text-ink mt-0.5">
+            ORDER STATUS TRACKER
+          </h2>
+        </div>
+        <span className="px-2.5 py-1 border border-ink text-[10px] font-bold uppercase tracking-wider text-ink bg-white">
+          {formatOrderStatus(isCompleted ? 'COMPLETED' : order.status)}
+        </span>
+      </div>
+
+      {/* Stepper Steps with Connecting Indicators */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
+        {/* Step 1: Order Placed */}
+        <div className="border border-line bg-[#FAFAFA] p-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted font-mono">
+                STAGE 01
+              </span>
+              <div className="w-6 h-6 rounded-full bg-ink text-white flex items-center justify-center text-xs font-bold">
+                ✓
+              </div>
+            </div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-ink">
+              Order Placed
+            </h3>
+            <p className="text-[11px] text-muted font-mono mt-1 leading-snug">
+              {order.orderDate ? formatOrderDate(order.orderDate) : 'Completed'}
+            </p>
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-ink border-t border-line/60 pt-2.5 mt-3 block">
+            ● Completed
+          </span>
+        </div>
+
+        {/* Step 2: Payment Confirmed / Processing */}
+        <div
+          className={`border p-4 flex flex-col justify-between transition-colors ${
+            isStep2Done
+              ? 'border-line bg-[#FAFAFA]'
+              : 'border-ink bg-white shadow-xs'
+          }`}
+        >
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted font-mono">
+                STAGE 02
+              </span>
+              <div
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                  isStep2Done
+                    ? 'bg-ink text-white'
+                    : 'border-2 border-ink text-ink bg-white'
+                }`}
+              >
+                {isStep2Done ? '✓' : <span className="w-2 h-2 rounded-full bg-ink animate-pulse" />}
+              </div>
+            </div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-ink">
+              {isStep2Done ? 'Payment Confirmed' : 'Payment Processing'}
+            </h3>
+            <p className="text-[11px] text-muted mt-1 leading-snug">
+              {isStep2Done
+                ? `Paid via ${formatPaymentMethod(order.paymentMethod)}`
+                : 'Awaiting Payment Confirmation'}
+            </p>
+          </div>
+          <span
+            className={`text-[10px] font-bold uppercase tracking-wider border-t border-line/60 pt-2.5 mt-3 block ${
+              isStep2Done ? 'text-ink' : 'text-neutral-900 font-extrabold'
+            }`}
+          >
+            {isStep2Done ? '● Confirmed' : '◐ In Progress'}
+          </span>
+        </div>
+
+        {/* Step 3: Order Completed & Delivered */}
+        <div
+          className={`border p-4 flex flex-col justify-between transition-colors ${
+            isStep3Done
+              ? 'border-line bg-[#FAFAFA]'
+              : 'border-line/70 bg-neutral-50/50 text-muted'
+          }`}
+        >
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted font-mono">
+                STAGE 03
+              </span>
+              <div
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                  isStep3Done
+                    ? 'bg-ink text-white'
+                    : 'border border-neutral-300 text-neutral-400 bg-white'
+                }`}
+              >
+                {isStep3Done ? '✓' : '03'}
+              </div>
+            </div>
+            <h3
+              className={`text-xs font-bold uppercase tracking-wider ${
+                isStep3Done ? 'text-ink' : 'text-neutral-500'
+              }`}
+            >
+              Completed & Delivered
+            </h3>
+            <p className="text-[11px] text-muted mt-1 leading-snug">
+              {isStep3Done
+                ? 'Order finalized and parcel delivered'
+                : 'Preparing for final dispatch & delivery'}
+            </p>
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted border-t border-line/60 pt-2.5 mt-3 block">
+            {isStep3Done ? '● Completed' : '○ Upcoming'}
+          </span>
+        </div>
+      </div>
+
+      {/* Delivery Motor/Scooter Track Bar */}
+      <div className="h-7 bg-neutral-200/80 rounded-full relative flex items-center px-3 mt-10 no-print">
+        {/* Dashed Road Line */}
+        <div className="border-t-2 border-dashed border-neutral-300 w-full" />
+
+        {/* Solid Black Progress Line */}
+        <div
+          className="absolute left-3 h-1 bg-neutral-900 rounded-full transition-all duration-1000 ease-out"
+          style={{ width: `calc(${scooterPercent}% - 12px)` }}
+        />
+
+        {/* Delivery Scooter / Motor SVG Icon & Floating Dark Tooltip */}
+        <div
+          className="absolute top-1/2 flex flex-col items-center transition-all duration-1000 ease-out z-10 select-none pointer-events-none"
+          style={{ left: `${scooterPercent}%`, transform: 'translate(-50%, -50%)' }}
+        >
+          {/* Floating Dark Tooltip Badge Above Scooter */}
+          <div className="absolute bottom-[calc(100%+6px)] bg-neutral-900 text-white text-[10px] font-bold tracking-wider uppercase px-3 py-1.5 rounded shadow-md flex items-center gap-1.5 whitespace-nowrap">
+            <span>{tooltipText}</span>
+            {showGreenDot && (
+              <span
+                className={`w-1.5 h-1.5 rounded-full bg-emerald-400 ${
+                  isPulsingGreen ? 'animate-pulse' : ''
+                }`}
+              />
+            )}
+            <span className="absolute top-full left-1/2 -translate-x-1/2 border-x-4 border-x-transparent border-t-4 border-t-neutral-900" />
+          </div>
+
+          {/* Crisp Black-and-White Delivery Scooter/Rider SVG facing right */}
+          <svg
+            viewBox="0 0 36 28"
+            className={`w-9 h-7 text-neutral-900 flex-shrink-0 ${
+              isPending ? 'animate-scooter-bobble' : ''
+            }`}
+            fill="currentColor"
+          >
+            {/* Delivery Box */}
+            <rect x="2" y="7" width="9" height="9" rx="1.5" fill="#171717" stroke="#ffffff" strokeWidth="0.8" />
+            <line x1="2" y1="11.5" x2="11" y2="11.5" stroke="#ffffff" strokeWidth="0.8" />
+
+            {/* Rider Body & Arm */}
+            <circle cx="15.5" cy="5" r="3.2" fill="#171717" />
+            <path d="M12.5 10 C12.5 9, 17 9, 18 11 L20 15 L16 16.5 L14 13.5 Z" fill="#171717" />
+            <path d="M17.5 12 L22 13.5" stroke="#171717" strokeWidth="1.6" strokeLinecap="round" />
+
+            {/* Scooter Chassis & Handlebars */}
+            <path d="M10 16 L22 16 L24 13.5" stroke="#171717" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <path d="M22 16 L25 21 L28 21" stroke="#171717" strokeWidth="2" strokeLinecap="round" fill="none" />
+            <line x1="23.5" y1="13.5" x2="22" y2="12" stroke="#171717" strokeWidth="1.5" strokeLinecap="round" />
+
+            {/* Rear Wheel */}
+            <circle cx="8" cy="22" r="4" fill="#ffffff" stroke="#171717" strokeWidth="2" />
+            <circle cx="8" cy="22" r="1.5" fill="#171717" />
+
+            {/* Front Wheel */}
+            <circle cx="28" cy="22" r="4" fill="#ffffff" stroke="#171717" strokeWidth="2" />
+            <circle cx="28" cy="22" r="1.5" fill="#171717" />
+
+            {/* Footrest / Mudguards */}
+            <path d="M6 19 Q8 16 12 18 L18 19 L21 21" fill="none" stroke="#171717" strokeWidth="1.2" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function OrderDetailPage() {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [cancelError, setCancelError] = useState('');
 
   const fetchOrder = useCallback(async () => {
     if (!id) return;
@@ -29,10 +330,22 @@ export default function OrderDetailPage() {
       }
     } catch (err) {
       console.warn('Failed to load order:', err);
-      // Backend returns 403 (forbidden ownership) or 404 (not found)
       setNotFound(true);
     } finally {
       setLoading(false);
+    }
+  }, [id]);
+
+  // Silent refetch that updates order state without triggering full-page loading spinner
+  const silentRefetch = useCallback(async () => {
+    if (!id) return;
+    try {
+      const data = await getOrderById(id);
+      if (data) {
+        setOrder(data);
+      }
+    } catch (err) {
+      console.debug('Silent order refresh skipped:', err);
     }
   }, [id]);
 
@@ -40,13 +353,63 @@ export default function OrderDetailPage() {
     fetchOrder();
   }, [fetchOrder]);
 
-  const handleCancel = async () => {
-    setCancelError('');
+  // Live auto-sync: 8-second polling interval + focus / visibilitychange listeners active ONLY while isPending is true
+  useEffect(() => {
+    const isPending = String(order?.status || '').toUpperCase() === 'PENDING';
+    if (!isPending || !id) return;
+
+    // 8-second polling interval
+    const interval = setInterval(() => {
+      silentRefetch();
+    }, 8000);
+
+    // Window focus listener
+    const handleFocus = () => {
+      silentRefetch();
+    };
+
+    // Document visibility change listener
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        silentRefetch();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [order?.status, id, silentRefetch]);
+
+  const handleCancelWithConfirm = async () => {
+    if (!order) return;
+    const qualifiesForRefund = canCancelOrder(order);
+    const cancelDeadline = getCancelDeadline(order.orderDate);
+    const deadlineText = cancelDeadline ? formatDeadlineDate(cancelDeadline) : '';
+
+    const confirmText = qualifiesForRefund
+      ? `Are you sure you want to cancel Order #${order.id}? Because this order is within the 2-hour window (until ${deadlineText}), your payment will be refunded and inventory restored.`
+      : `This order was placed more than 2 hours ago (expired ${deadlineText}). Cancellations after 2 hours cannot be refunded.`;
+
+    const result = await ConfirmDialog.fire({
+      title: 'Cancel Order?',
+      text: confirmText,
+      confirmButtonText: 'Yes, Cancel Order',
+      cancelButtonText: 'Keep Order',
+    });
+
+    if (!result.isConfirmed) return;
+
     setCancelling(true);
     try {
       await cancelOrder(id);
-      setConfirmCancel(false);
-      // Refetch the real post-cancel data from backend
+      Toast.fire({
+        title: 'Order cancelled successfully',
+      });
       await fetchOrder();
     } catch (err) {
       console.error('Failed to cancel order:', err);
@@ -55,9 +418,10 @@ export default function OrderDetailPage() {
         err.response?.data ||
         err.message ||
         'Unable to cancel order.';
-      setCancelError(
-        typeof msg === 'string' ? msg.replace(/^Error\s*:\s*/i, '') : 'Unable to cancel order.'
-      );
+      AlertDialog.fire({
+        title: 'Cancellation Failed',
+        text: typeof msg === 'string' ? msg.replace(/^Error\s*:\s*/i, '') : 'Unable to cancel order.',
+      });
     } finally {
       setCancelling(false);
     }
@@ -98,16 +462,16 @@ export default function OrderDetailPage() {
     );
   }
 
-  const qualifiesForCancel = canCancelOrder(order);
-  const cancelDeadline = getCancelDeadline(order?.orderDate);
+  const isPending = String(order?.status || '').toUpperCase() === 'PENDING';
+  const qualifiesForCancel = isPending && canCancelOrder(order);
+  const cancelDeadline = getCancelDeadline(order.orderDate);
   const formattedDeadline = formatDeadlineDate(cancelDeadline);
-  const isCancelled = String(order?.status).toUpperCase() === 'CANCELLED';
 
   return (
     <div className="bg-surface min-h-screen py-10">
       <div className="mx-auto max-w-[1280px] px-6 md:px-12">
         {/* Top Header */}
-        <div className="flex items-center justify-between border-b border-line pb-6 mb-8">
+        <div className="no-print flex items-center justify-between border-b border-line pb-6 mb-8">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted">
               SETTLEMENT SPECIFICATION
@@ -124,105 +488,78 @@ export default function OrderDetailPage() {
           </Link>
         </div>
 
+        {/* Visual Order Status Stepper */}
+        <OrderStatusStepper order={order} />
+
         {/* Shared OrderReceipt Component */}
         <OrderReceipt order={order}>
-          {/* Error Message if Cancellation Fails */}
-          {cancelError && (
-            <div className="mb-4 p-3 border border-red-300 bg-red-50 text-red-700 text-xs font-semibold">
-              {cancelError}
-            </div>
-          )}
-
-          {/* Cancellation Notice Banner with Expired Date info */}
-          {qualifiesForCancel ? (
-            <div className="border border-line bg-white p-3.5 flex items-center gap-3 text-xs text-muted shadow-surface mb-4">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                className="text-ink flex-shrink-0"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-              <div>
-                <span className="font-bold text-ink block">
-                  Cancellation allowed until: {formattedDeadline}
-                </span>
-                <span className="text-[11px] text-muted">
-                  You can self-cancel this order within 2 hours of placement. Cancellation will expire after this date.
-                </span>
-              </div>
-            </div>
-          ) : !isCancelled && cancelDeadline ? (
-            <div className="border border-line bg-neutral-100/70 p-3.5 flex items-center gap-3 text-xs text-muted shadow-surface mb-4">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                className="text-muted flex-shrink-0"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-              <div>
-                <span className="font-bold text-ink block">
-                  Cancellation expired: {formattedDeadline}
-                </span>
-                <span className="text-[11px] text-muted">
-                  The 2-hour cancellation window has ended. You can no longer cancel this order.
-                </span>
-              </div>
-            </div>
-          ) : null}
-
-          {/* Inline Cancel Order Action (Only shown if eligible) */}
-          {qualifiesForCancel && (
-            <div className="mb-6 pt-2">
-              {confirmCancel ? (
-                <div className="p-4 border border-line bg-white space-y-3">
-                  <p className="text-xs text-ink font-medium">
-                    Are you sure you want to cancel this order? This will restore item stock and void payment.
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={cancelling}
-                      onClick={handleCancel}
-                      className="px-4 py-2 bg-red-600 text-white text-xs font-bold uppercase tracking-wider hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer"
-                    >
-                      {cancelling ? 'Cancelling...' : 'Yes, Cancel Order'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={cancelling}
-                      onClick={() => setConfirmCancel(false)}
-                      className="px-4 py-2 border border-line bg-transparent text-xs font-bold uppercase tracking-wider text-ink hover:bg-neutral-100 transition-colors cursor-pointer"
-                    >
-                      No, Keep Order
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmCancel(true)}
-                  className="w-full py-3 border border-red-300 text-red-600 text-xs font-bold uppercase tracking-wider hover:bg-red-50 transition-colors cursor-pointer"
+          {/* Cancellation Notice Banner (Shown ONLY for PENDING orders) */}
+          {isPending && (
+            qualifiesForCancel ? (
+              <div className="border border-line bg-white p-3.5 flex items-center gap-3 text-xs text-muted shadow-surface mb-4">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="text-ink flex-shrink-0"
                 >
-                  Cancel Order
-                </button>
-              )}
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <div>
+                  <span className="font-bold text-ink block">
+                    Cancellation allowed until: {formattedDeadline}
+                  </span>
+                  <span className="text-[11px] text-muted">
+                    You can self-cancel this order within 2 hours of placement. Cancellation will expire after this date.
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="border border-line bg-neutral-100/70 p-3.5 flex items-center gap-3 text-xs text-muted shadow-surface mb-4">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="text-muted flex-shrink-0"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+                <div>
+                  <span className="font-bold text-ink block">
+                    Cancellation expired: {formattedDeadline}
+                  </span>
+                  <span className="text-[11px] text-muted">
+                    The 2-hour cancellation window has ended. You can no longer self-cancel this order.
+                  </span>
+                </div>
+              </div>
+            )
+          )}
+
+          {/* Cancel Order Action Button (Visible ONLY when status === "PENDING") */}
+          {isPending && (
+            <div className="mb-6 pt-2">
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={handleCancelWithConfirm}
+                className="w-full py-3 border border-red-300 text-red-600 text-xs font-bold uppercase tracking-wider hover:bg-red-50 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {cancelling ? 'Cancelling Order...' : 'Cancel Order'}
+              </button>
             </div>
           )}
 
-          {/* CTAs */}
+          {/* Navigation CTAs */}
           <div className="flex flex-col gap-3">
             <Link
               to="/orders"

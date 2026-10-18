@@ -362,7 +362,6 @@ export default function UsersPage() {
               ) : paginatedUsers.length > 0 ? (
                 paginatedUsers.map((row) => {
                   const role = String(row.role || 'USER').toUpperCase();
-                  const isUserRole = role === 'USER';
                   const isSelf =
                     currentUser &&
                     (Number(currentUser.id) === Number(row.id) ||

@@ -24,21 +24,22 @@ import com.setec.stock_inventory.repo.ProductRepository;
 import com.setec.stock_inventory.repo.StockMovementRepository;
 import com.setec.stock_inventory.repo.UserRepository;
 import com.setec.stock_inventory.service.OrderService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
@@ -47,6 +48,23 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final StockMovementRepository stockMovementRepository;
     private final CartRepository cartRepository;
+
+    @Autowired
+    public OrderServiceImpl(
+            OrderRepository orderRepository,
+            OrderItemRepository orderItemRepository,
+            ProductRepository productRepository,
+            UserRepository userRepository,
+            StockMovementRepository stockMovementRepository,
+            CartRepository cartRepository
+    ) {
+        this.orderRepository = orderRepository;
+        this.orderItemRepository = orderItemRepository;
+        this.productRepository = productRepository;
+        this.userRepository = userRepository;
+        this.stockMovementRepository = stockMovementRepository;
+        this.cartRepository = cartRepository;
+    }
 
     @Override
     @Transactional
@@ -61,7 +79,6 @@ public class OrderServiceImpl implements OrderService {
                 .orderDate(LocalDateTime.now())
                 .status("PENDING")
                 .paymentStatus(PaymentStatus.UNPAID)
-                .totalAmount(0)
                 .build();
 
         List<OrderItemInput> itemInputs = new ArrayList<>();
@@ -101,7 +118,6 @@ public class OrderServiceImpl implements OrderService {
                 .paymentStatus(PaymentStatus.UNPAID)
                 .status("PENDING")
                 .orderDate(LocalDateTime.now())
-                .totalAmount(0)
                 .build();
 
         Order saved = processOrderCreation(order, itemInputs, currentUser);
@@ -114,9 +130,12 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional
     public OrderResponseDto getOrderById(Long id) {
         Order order = orderRepository.findByIdWithDetails(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id " + id));
+
+        checkAndAutoCompleteOrder(order);
 
         User currentUser = getCurrentAuthenticatedUser();
         if (currentUser != null && currentUser.getRole() == Role.USER) {
@@ -129,28 +148,60 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional
     public List<OrderResponseDto> getAllOrders() {
+        autoCompleteExpiredPendingOrders();
         return orderRepository.findAllWithDetails().stream()
                 .map(OrderMapper::toResponse)
                 .toList();
     }
 
     @Override
+    @Transactional
     public List<OrderResponseDto> getOrdersByUserId(Long userId) {
         if (!userRepository.existsById(userId)) {
             throw new ResourceNotFoundException("Cannot find user with id: " + userId);
         }
+        autoCompleteExpiredPendingOrders();
         return orderRepository.findByUserIdWithDetails(userId).stream()
                 .map(OrderMapper::toResponse)
                 .toList();
     }
 
     @Override
+    @Transactional
     public List<OrderResponseDto> getMyOrders() {
         User currentUser = getRequiredAuthenticatedUser();
+        autoCompleteExpiredPendingOrders();
         return orderRepository.findByUserIdWithDetails(currentUser.getId()).stream()
                 .map(OrderMapper::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    @org.springframework.scheduling.annotation.Scheduled(fixedRate = 60000)
+    public void autoCompleteExpiredPendingOrders() {
+        List<Order> pendingOrders = orderRepository.findByStatusIgnoreCase("PENDING");
+        LocalDateTime now = LocalDateTime.now();
+        for (Order order : pendingOrders) {
+            if (order.getOrderDate() != null && Duration.between(order.getOrderDate(), now).toHours() >= 48) {
+                order.setStatus("COMPLETED");
+                order.setPaymentStatus(PaymentStatus.PAID);
+                orderRepository.save(order);
+            }
+        }
+    }
+
+    private void checkAndAutoCompleteOrder(Order order) {
+        if (order != null && "PENDING".equalsIgnoreCase(order.getStatus()) && order.getOrderDate() != null) {
+            long hoursElapsed = Duration.between(order.getOrderDate(), LocalDateTime.now()).toHours();
+            if (hoursElapsed >= 48) {
+                order.setStatus("COMPLETED");
+                order.setPaymentStatus(PaymentStatus.PAID);
+                orderRepository.save(order);
+            }
+        }
     }
 
     @Override
@@ -253,7 +304,7 @@ public class OrderServiceImpl implements OrderService {
             }
         }
 
-        double totalAmount = 0.0;
+        BigDecimal subtotal = BigDecimal.ZERO;
         List<OrderItem> orderItems = new ArrayList<>();
         List<StockMovement> stockMovements = new ArrayList<>();
 
@@ -264,7 +315,8 @@ public class OrderServiceImpl implements OrderService {
             product.setStock(newStock);
             productRepository.save(product);
 
-            double subtotal = input.price * input.quantity;
+            BigDecimal unitPrice = BigDecimal.valueOf(input.price).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal itemTotal = unitPrice.multiply(BigDecimal.valueOf(input.quantity));
 
             OrderItem orderItem = new OrderItem();
             orderItem.setProduct(product);
@@ -273,7 +325,7 @@ public class OrderServiceImpl implements OrderService {
             orderItem.setOrder(order);
 
             orderItems.add(orderItem);
-            totalAmount += subtotal;
+            subtotal = subtotal.add(itemTotal);
 
             stockMovements.add(StockMovement.builder()
                     .product(product)
@@ -285,6 +337,16 @@ public class OrderServiceImpl implements OrderService {
                     .build());
         }
 
+        subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal taxAmount = subtotal.multiply(new BigDecimal("0.10")).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal shippingCost = subtotal.compareTo(new BigDecimal("100.00")) >= 0
+                ? new BigDecimal("0.00")
+                : new BigDecimal("5.00");
+        BigDecimal totalAmount = subtotal.add(taxAmount).add(shippingCost);
+
+        order.setSubtotal(subtotal);
+        order.setShippingCost(shippingCost);
+        order.setTaxAmount(taxAmount);
         order.setTotalAmount(totalAmount);
         order.setOrderItems(orderItems);
 

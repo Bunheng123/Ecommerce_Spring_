@@ -40,5 +40,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         WHERE o.user.id = :userId
     """)
     List<Order> findByUserIdWithDetails(Long userId);
+
+    List<Order> findByStatusIgnoreCase(String status);
 }
 

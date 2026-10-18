@@ -24,8 +24,16 @@ public class DataSeeder implements CommandLineRunner {
         try {
             jdbcTemplate.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;");
             jdbcTemplate.execute("ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('ADMIN', 'STOCK', 'USER'));");
+            jdbcTemplate.execute("ALTER TABLE users DROP COLUMN IF EXISTS address;");
+            jdbcTemplate.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS subtotal numeric(12,2);");
+            jdbcTemplate.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_cost numeric(12,2) DEFAULT 0.00;");
+            jdbcTemplate.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_amount numeric(12,2) DEFAULT 0.00;");
+            jdbcTemplate.execute("ALTER TABLE orders ALTER COLUMN total_amount TYPE numeric(12,2) USING round(total_amount::numeric, 2);");
+            jdbcTemplate.execute("UPDATE orders SET subtotal = total_amount WHERE subtotal IS NULL;");
+            jdbcTemplate.execute("UPDATE orders SET shipping_cost = 0.00 WHERE shipping_cost IS NULL;");
+            jdbcTemplate.execute("UPDATE orders SET tax_amount = 0.00 WHERE tax_amount IS NULL;");
         } catch (Exception e) {
-            log.warn("Could not update users_role_check constraint: {}", e.getMessage());
+            log.warn("Could not execute startup schema updates: {}", e.getMessage());
         }
 
         User admin = userRepository.findByUsername("admin").orElseGet(() -> User.builder()

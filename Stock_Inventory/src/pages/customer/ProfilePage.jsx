@@ -32,7 +32,6 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState(() => user?.fullName || user?.username || '');
   const [email, setEmail] = useState(() => user?.email || '');
   const [phone, setPhone] = useState(() => user?.phone || '');
-  const [address, setAddress] = useState(() => user?.address || '');
   const [profileImageUrl, setProfileImageUrl] = useState(() => user?.profileImageUrl || '');
 
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -69,7 +68,6 @@ export default function ProfilePage() {
             setFullName(freshUser.fullName || freshUser.username || '');
             setEmail(freshUser.email || '');
             setPhone(freshUser.phone || '');
-            setAddress(freshUser.address || '');
             setProfileImageUrl(freshUser.profileImageUrl || '');
             updateUser(freshUser);
           }
@@ -133,7 +131,6 @@ export default function ProfilePage() {
       const updated = await updateProfile({
         fullName: fullName.trim(),
         phone: phone.trim(),
-        address: address.trim(),
       });
 
       updateUser(updated);
@@ -347,22 +344,6 @@ export default function ProfilePage() {
                 placeholder="e.g. +855 12 345 678"
                 className="w-full border border-line bg-[#FAFAFA] px-3.5 py-2.5 text-xs text-ink placeholder:text-subtle outline-none focus:border-ink focus:bg-white"
               />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-ink mb-1.5">
-                Delivery Address
-              </label>
-              <textarea
-                rows={3}
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="e.g. Street 271, Sangkat Boeung Tumpun, Khan Mean Chey, Phnom Penh"
-                className="w-full border border-line bg-[#FAFAFA] px-3.5 py-2.5 text-xs text-ink placeholder:text-subtle outline-none focus:border-ink focus:bg-white resize-none"
-              />
-              <p className="mt-1 text-[11px] text-muted">
-                This address will auto-fill your delivery details during checkout.
-              </p>
             </div>
 
             {profileSuccessMsg && (

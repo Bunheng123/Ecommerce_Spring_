@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { getMyOrders, cancelOrder } from '../../api/orders';
 import {
   formatPaymentStatus,
   formatOrderStatus,
-  formatOrderDate,
   canCancelOrder,
 } from '../../components/OrderReceipt';
 
@@ -26,7 +25,6 @@ export function getOrderPreviewText(order) {
 }
 
 export default function OrderHistoryPage() {
-  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState(null);
@@ -149,7 +147,8 @@ export default function OrderHistoryPage() {
             <div className="min-w-[760px] divide-y divide-line">
               {orders.map((order) => {
                 const isCancelled = String(order.status).toUpperCase() === 'CANCELLED';
-                const qualifiesForCancel = canCancelOrder(order);
+                const isPending = String(order?.status || '').toUpperCase() === 'PENDING';
+                const qualifiesForCancel = isPending && canCancelOrder(order);
                 const previewText = getOrderPreviewText(order);
                 const orderDateStr = order.orderDate
                   ? new Date(order.orderDate).toLocaleDateString('en-US', {

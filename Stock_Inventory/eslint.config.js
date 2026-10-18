@@ -19,6 +19,9 @@ export default defineConfig([
     },
     rules: {
       'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/preserve-caught-error': 'off',
+      'preserve-caught-error': 'off',
+      'react-refresh/only-export-components': 'off',
     },
   },
 ])

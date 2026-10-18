@@ -1,4 +1,3 @@
-import React from 'react';
 
 /**
  * Format payment method enum value for clean display
@@ -60,7 +59,8 @@ export function formatOrderStatus(status) {
  */
 export function canCancelOrder(order) {
   if (!order || !order.orderDate) return false;
-  if (String(order.status).toUpperCase() === 'CANCELLED') return false;
+  const isPending = String(order.status || '').toUpperCase() === 'PENDING';
+  if (!isPending) return false;
   const elapsed = Date.now() - new Date(order.orderDate).getTime();
   return elapsed < 2 * 60 * 60 * 1000;
 }
@@ -124,44 +124,69 @@ export default function OrderReceipt({ order, children }) {
 
   const items = order.orderItems || order.items || [];
 
-  // Compute subtotal from line items
-  const subtotal = items.reduce((sum, it) => {
+  // Subtotal from backend or fallback to computed items subtotal
+  const calculatedItemsSubtotal = items.reduce((sum, it) => {
     const qty = Number(it.quantity) || 1;
     const price = Number(it.price) || 0;
     const lineTotal = it.subTotal != null ? Number(it.subTotal) : (it.subtotal != null ? Number(it.subtotal) : price * qty);
     return sum + lineTotal;
   }, 0);
 
-  // Directly use order.totalAmount from backend (backend total wins if they differ)
-  const total = order.totalAmount != null ? Number(order.totalAmount) : subtotal;
+  const subtotal = order.subtotal != null ? Number(order.subtotal) : calculatedItemsSubtotal;
+  const shippingCost = order.shippingCost != null ? Number(order.shippingCost) : (subtotal >= 100 ? 0.0 : 5.0);
+  const taxAmount = order.taxAmount != null ? Number(order.taxAmount) : Math.round(subtotal * 10) / 100;
+  const total = order.totalAmount != null ? Number(order.totalAmount) : (subtotal + shippingCost + taxAmount);
   const cancelDeadline = getCancelDeadline(order.orderDate);
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
-    <div className="mx-auto max-w-[640px] bg-[#F7F7F7] p-8 md:p-12 shadow-surface border border-line/60">
-      {/* Receipt Header */}
-      <div className="text-center mb-8">
-        <h2 className="text-2xl md:text-3xl font-extrabold uppercase tracking-tight text-ink">
-          ORDER #{order.id}
-        </h2>
-        {order.orderDate && (
-          <p className="text-xs text-muted font-mono tracking-tight mt-1">
-            {formatOrderDate(order.orderDate)}
-          </p>
-        )}
+    <div id="printable-invoice" className="printable-invoice mx-auto max-w-[680px] bg-[#F7F7F7] p-6 sm:p-10 shadow-surface border border-line/60">
+      {/* Store Header & Document Title */}
+      <div className="border-b-2 border-ink pb-5 mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted block">
+            STOCK INVENTORY &bull; OFFICIAL SETTLEMENT
+          </span>
+          <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-ink mt-0.5">
+            TAX INVOICE & RECEIPT
+          </h2>
+        </div>
+        <div className="sm:text-right">
+          <span className="text-xs font-mono font-bold text-ink block">
+            INVOICE #{order.id}
+          </span>
+          {order.orderDate && (
+            <span className="text-[10px] text-muted font-mono block mt-0.5">
+              {formatOrderDate(order.orderDate)}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Order & Customer Details */}
-      <div className="mb-8">
-        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted block mb-4">
+      {/* Order & Customer Specification Details */}
+      <div className="mb-6">
+        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted block mb-3">
           SPECIFICATION DETAILS
         </span>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3.5 gap-x-6 text-xs">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted block mb-1">
               ORDER STATUS
             </span>
-            <span className="font-bold text-ink mt-0.5 block">
+            <span className="inline-block px-2.5 py-0.5 border border-ink text-[10px] font-bold uppercase tracking-wider text-ink bg-white">
               {formatOrderStatus(order.status)}
+            </span>
+          </div>
+
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted block mb-1">
+              PAYMENT STATUS
+            </span>
+            <span className="inline-block px-2.5 py-0.5 border border-ink text-[10px] font-bold uppercase tracking-wider text-ink bg-white">
+              {order.paymentStatus || 'UNPAID'}
             </span>
           </div>
 
@@ -176,95 +201,136 @@ export default function OrderReceipt({ order, children }) {
 
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
-              PAYMENT STATUS
+              CUSTOMER
             </span>
-            <span className="font-bold text-ink mt-0.5 block leading-snug">
-              {formatPaymentStatus(order.paymentStatus)}
+            <span className="font-bold text-ink mt-0.5 block font-mono">
+              {order.username ? `@${order.username}` : (order.userId ? `User #${order.userId}` : 'N/A')}
             </span>
           </div>
 
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
-              CANCELLATION DEADLINE
+              CONTACT PHONE
             </span>
-            <span className="font-bold text-ink mt-0.5 block leading-snug">
-              {cancelDeadline ? formatDeadlineDate(cancelDeadline) : 'N/A'}
+            <span className="font-bold text-ink mt-0.5 block font-mono">
+              {order.phone || 'N/A'}
             </span>
           </div>
+
+          {cancelDeadline && String(order.status || '').toUpperCase() === 'PENDING' && (
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
+                CANCELLATION DEADLINE
+              </span>
+              <span className="font-bold text-ink mt-0.5 block leading-snug">
+                {formatDeadlineDate(cancelDeadline)}
+              </span>
+            </div>
+          )}
 
           <div className="sm:col-span-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
               SHIPPING ADDRESS
             </span>
             <span className="text-ink mt-0.5 block leading-relaxed">
-              {order.shippingAddress || 'No shipping address provided'}
+              {order.shippingAddress || 'No delivery address provided'}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Itemized List */}
-      <div className="pt-6 border-t border-line">
-        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted block mb-4">
-          ITEMS PURCHASED ({String(items.length).padStart(2, '0')})
+      {/* Itemized Table */}
+      <div className="pt-5 border-t border-line">
+        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted block mb-3">
+          ITEMIZED MANIFEST ({String(items.length).padStart(2, '0')})
         </span>
 
-        <div className="space-y-4 divide-y divide-line/40">
-          {items.map((item, idx) => {
-            const qty = Number(item.quantity) || 1;
-            const price = Number(item.price) || 0;
-            const lineTotal = item.subTotal != null
-              ? Number(item.subTotal)
-              : (item.subtotal != null ? Number(item.subtotal) : price * qty);
-            const name = item.productName || item.name || 'Artifact';
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse my-2">
+            <thead>
+              <tr className="border-b border-ink/40 text-[10px] font-bold uppercase tracking-wider text-muted">
+                <th className="py-2.5 pr-4">Product</th>
+                <th className="py-2.5 px-3 text-center">Qty</th>
+                <th className="py-2.5 px-3 text-right">Unit Price</th>
+                <th className="py-2.5 pl-4 text-right">Line Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line/40 text-xs">
+              {items.map((item, idx) => {
+                const qty = Number(item.quantity) || 1;
+                const price = Number(item.price) || 0;
+                const lineTotal = item.subTotal != null
+                  ? Number(item.subTotal)
+                  : (item.subtotal != null ? Number(item.subtotal) : price * qty);
+                const name = item.productName || item.name || 'Artifact';
 
-            return (
-              <div
-                key={item.id || idx}
-                className="pt-3 first:pt-0 flex items-center justify-between gap-4"
-              >
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-ink truncate">{name}</p>
-                  <p className="text-[10px] text-muted font-mono">
-                    Qty: {String(qty).padStart(2, '0')} × ${price.toFixed(2)}
-                  </p>
-                </div>
-                <span className="text-xs font-bold text-ink shrink-0">
-                  ${lineTotal.toFixed(2)}
-                </span>
-              </div>
-            );
-          })}
+                return (
+                  <tr key={item.id || idx}>
+                    <td className="py-3 pr-4 font-semibold text-ink">
+                      {name}
+                      {item.sku && <span className="block text-[10px] text-muted font-mono">{item.sku}</span>}
+                    </td>
+                    <td className="py-3 px-3 text-center font-mono text-ink">
+                      {String(qty).padStart(2, '0')}
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono text-muted">
+                      ${price.toFixed(2)}
+                    </td>
+                    <td className="py-3 pl-4 text-right font-bold font-mono text-ink">
+                      ${lineTotal.toFixed(2)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
       {/* Financial Breakdown */}
-      <div className="mt-8 pt-6 border-t border-line space-y-2.5 text-xs">
+      <div className="mt-6 pt-5 border-t border-line space-y-2 text-xs">
         <div className="flex justify-between text-muted">
           <span>Subtotal</span>
           <span className="font-bold text-ink">${subtotal.toFixed(2)}</span>
         </div>
         <div className="flex justify-between text-muted">
-          <span>Shipping</span>
-          <span className="font-bold text-ink">Free</span>
+          <span>Shipping Cost</span>
+          <span className="font-bold text-ink">
+            {shippingCost === 0 ? 'FREE ($0.00)' : `$${shippingCost.toFixed(2)}`}
+          </span>
         </div>
         <div className="flex justify-between text-muted">
-          <span>Estimated Tax / VAT</span>
-          <span className="font-bold text-ink">$0.00</span>
+          <span>Tax (10%)</span>
+          <span className="font-bold text-ink">${taxAmount.toFixed(2)}</span>
         </div>
 
-        <div className="pt-4 mt-2 border-t border-line flex justify-between items-baseline">
-          <span className="text-xs font-bold uppercase tracking-wider text-ink">
-            TOTAL
+        <div className="pt-3.5 mt-2 border-t border-line flex justify-between items-baseline">
+          <span className="text-xs font-black uppercase tracking-wider text-ink">
+            TOTAL AMOUNT
           </span>
-          <span className="text-xl md:text-2xl font-extrabold tracking-tight text-ink">
+          <span className="text-xl sm:text-2xl font-black tracking-tight text-ink">
             ${total.toFixed(2)}{' '}
             <span className="text-sm font-normal text-muted">USD</span>
           </span>
         </div>
       </div>
 
-      {children && <div className="mt-6 pt-6 border-t border-line">{children}</div>}
+      {/* Prominent Download / Print Invoice PDF Button */}
+      <div className="no-print pt-6 border-t border-line mt-6">
+        <button
+          type="button"
+          onClick={handlePrint}
+          className="w-full h-11 bg-ink text-white text-xs font-bold uppercase tracking-[0.14em] hover:bg-neutral-800 transition-colors flex items-center justify-center gap-2.5 cursor-pointer shadow-sm"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zM7 9V5a2 2 0 012-2h6a2 2 0 012 2v4" />
+          </svg>
+          <span>Download / Print Invoice PDF</span>
+        </button>
+      </div>
+
+      {/* Embedded Action Controls (hidden in print) */}
+      {children && <div className="no-print mt-6 pt-6 border-t border-line">{children}</div>}
     </div>
   );
 }

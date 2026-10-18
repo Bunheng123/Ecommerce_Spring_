@@ -158,9 +158,6 @@ public class UserServiceImpl implements UserService {
         if (request.getPhone() != null) {
             user.setPhone(request.getPhone().trim());
         }
-        if (request.getAddress() != null) {
-            user.setAddress(request.getAddress().trim());
-        }
 
         User saved = userRepository.save(user);
         return UserMapper.toResponse(saved);

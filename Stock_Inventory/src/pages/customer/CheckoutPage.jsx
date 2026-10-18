@@ -29,7 +29,7 @@ export default function CheckoutPage() {
     fullName: user?.fullName || user?.username || '',
     email: user?.email || '',
     phone: user?.phone || '',
-    streetAddress: user?.address || '',
+    streetAddress: '',
     city: '',
     postalCode: '',
     country: 'Switzerland (CH)',
@@ -53,7 +53,6 @@ export default function CheckoutPage() {
             fullName: profile.fullName || profile.username || prev.fullName || '',
             email: profile.email || prev.email || '',
             phone: profile.phone || prev.phone || '',
-            streetAddress: profile.address || prev.streetAddress || '',
           }));
         }
       })
@@ -75,8 +74,8 @@ export default function CheckoutPage() {
     : [];
 
   const subtotal = Number(cartSubtotal || 0);
-  const shippingCost = 0.0;
-  const tax = 0.0;
+  const shippingCost = subtotal >= 100.0 ? 0.0 : 5.0;
+  const tax = Math.round(subtotal * 10) / 100;
   const total = subtotal + shippingCost + tax;
 
   const handleInputChange = (e) => {
@@ -135,7 +134,11 @@ export default function CheckoutPage() {
         id: Math.floor(100000 + Math.random() * 900000),
         status: 'CONFIRMED',
         orderDate: new Date().toISOString(),
+        subtotal: subtotal,
+        shippingCost: shippingCost,
+        taxAmount: tax,
         totalAmount: total,
+        phone: formData.phone,
         shippingAddress: shippingString,
         paymentMethod: paymentMethod,
         orderItems: items.map(it => ({
@@ -701,13 +704,18 @@ export default function CheckoutPage() {
                     <span>Subtotal</span>
                     <span className="font-bold text-ink">${subtotal.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-muted">
-                    <span>Shipping (Global Express) <span className="text-[9px] font-mono uppercase text-ink">TRACKED</span></span>
-                    <span className="font-bold text-ink">FREE</span>
+                  <div className="flex justify-between text-muted items-center">
+                    <div>
+                      <span>Shipping</span>
+                      <p className="text-[10px] text-muted">Free shipping on orders over $100</p>
+                    </div>
+                    <span className="font-bold text-ink">
+                      {shippingCost === 0 ? 'FREE ($0.00)' : `$${shippingCost.toFixed(2)}`}
+                    </span>
                   </div>
                   <div className="flex justify-between text-muted">
-                    <span>Estimated Tax / VAT (0.00%)</span>
-                    <span className="font-bold text-ink">$0.00</span>
+                    <span>Tax (10%)</span>
+                    <span className="font-bold text-ink">${tax.toFixed(2)}</span>
                   </div>
 
                   <div className="pt-4 mt-3 border-t border-line flex justify-between items-baseline">

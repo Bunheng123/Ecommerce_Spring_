@@ -47,9 +47,6 @@ public class User {
     @Column(length = 20)
     private String phone;
 
-    @Column(length = 255)
-    private String address;
-
     @CreationTimestamp
     private LocalDateTime createdAt;
 

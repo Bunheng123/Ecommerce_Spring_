@@ -16,7 +16,6 @@ export default function AccountDrawer({ isOpen, onClose }) {
   const [isEditing, setIsEditing] = useState(false);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
   const [profileImageUrl, setProfileImageUrl] = useState('');
 
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -59,7 +58,6 @@ export default function AccountDrawer({ isOpen, onClose }) {
       if (user) {
         setFullName(user.fullName || '');
         setPhone(user.phone || '');
-        setAddress(user.address || '');
         setProfileImageUrl(user.profileImageUrl || '');
       }
 
@@ -69,7 +67,6 @@ export default function AccountDrawer({ isOpen, onClose }) {
             if (freshUser) {
               setFullName(freshUser.fullName || '');
               setPhone(freshUser.phone || '');
-              setAddress(freshUser.address || '');
               setProfileImageUrl(freshUser.profileImageUrl || '');
               updateUser(freshUser);
             }
@@ -91,7 +88,6 @@ export default function AccountDrawer({ isOpen, onClose }) {
     if (!isEditing && user) {
       setFullName(user.fullName || '');
       setPhone(user.phone || '');
-      setAddress(user.address || '');
       setProfileImageUrl(user.profileImageUrl || '');
     }
   }, [user, isEditing]);
@@ -127,7 +123,6 @@ export default function AccountDrawer({ isOpen, onClose }) {
     setIsEditing(false);
     setFullName(user?.fullName || '');
     setPhone(user?.phone || '');
-    setAddress(user?.address || '');
     setProfileImageUrl(user?.profileImageUrl || '');
     setErrorMsg('');
     setPhotoError('');
@@ -170,7 +165,6 @@ export default function AccountDrawer({ isOpen, onClose }) {
       const updated = await updateProfile({
         fullName: fullName.trim(),
         phone: phone.trim(),
-        address: address.trim(),
       });
 
       updateUser(updated);
@@ -371,24 +365,6 @@ export default function AccountDrawer({ isOpen, onClose }) {
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder={isEditing ? 'e.g. +855 12 345 678' : 'Not set'}
                 className={`w-full rounded-xl px-3.5 py-2 text-xs font-semibold transition-all ${
-                  !isEditing
-                    ? 'bg-neutral-100/70 border border-line text-neutral-600 cursor-not-allowed select-none'
-                    : 'bg-[#F5F6FA] border border-line text-ink outline-none focus:border-ink focus:bg-white focus:ring-1 focus:ring-ink placeholder:text-muted'
-                }`}
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-ink mb-1.5">
-                Delivery Address
-              </label>
-              <textarea
-                rows={2}
-                disabled={!isEditing}
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder={isEditing ? 'e.g. Street 271, Phnom Penh' : 'Not set'}
-                className={`w-full rounded-xl px-3.5 py-2 text-xs font-semibold resize-none transition-all ${
                   !isEditing
                     ? 'bg-neutral-100/70 border border-line text-neutral-600 cursor-not-allowed select-none'
                     : 'bg-[#F5F6FA] border border-line text-ink outline-none focus:border-ink focus:bg-white focus:ring-1 focus:ring-ink placeholder:text-muted'

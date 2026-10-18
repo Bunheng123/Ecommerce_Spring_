@@ -26,4 +26,6 @@ public interface OrderService {
     OrderResponseDto selfCancelOrder(Long id);
 
     OrderResponseDto updatePaymentStatus(Long id, PaymentStatus status);
+    
+    void autoCompleteExpiredPendingOrders();
 }
