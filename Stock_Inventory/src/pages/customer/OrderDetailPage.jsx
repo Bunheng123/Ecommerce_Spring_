@@ -9,7 +9,7 @@ import OrderReceipt, {
   formatPaymentMethod,
 } from '../../components/OrderReceipt';
 import { getOrderById, cancelOrder } from '../../api/orders';
-import { Toast, ConfirmDialog, AlertDialog } from '../../admin/utils/swalConfig';
+import { ConfirmDialog, AlertDialog } from '../../admin/utils/swalConfig';
 
 /**
  * Visual monochrome Order Status Stepper
@@ -391,15 +391,77 @@ export default function OrderDetailPage() {
     const cancelDeadline = getCancelDeadline(order.orderDate);
     const deadlineText = cancelDeadline ? formatDeadlineDate(cancelDeadline) : '';
 
-    const confirmText = qualifiesForRefund
-      ? `Are you sure you want to cancel Order #${order.id}? Because this order is within the 2-hour window (until ${deadlineText}), your payment will be refunded and inventory restored.`
-      : `This order was placed more than 2 hours ago (expired ${deadlineText}). Cancellations after 2 hours cannot be refunded.`;
+    const cancelHtml = `
+      <div style="text-align: left; font-size: 12px; color: #171717; margin-top: 4px;">
+        <div style="background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e5e5; padding-bottom: 6px; margin-bottom: 6px;">
+            <span style="font-size: 11px; font-weight: 700; color: #737373; text-transform: uppercase; letter-spacing: 0.05em;">Order Reference</span>
+            <span style="font-family: monospace; font-weight: 700; font-size: 13px; color: #171717;">#${order.id}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e5e5; padding-bottom: 6px; margin-bottom: 6px;">
+            <span style="font-size: 11px; font-weight: 700; color: #737373; text-transform: uppercase; letter-spacing: 0.05em;">Deadline</span>
+            <span style="font-weight: 600; font-size: 12px; color: #171717;">${deadlineText || 'Within 2 hours of placement'}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 11px; font-weight: 700; color: #737373; text-transform: uppercase; letter-spacing: 0.05em;">Refund Status</span>
+            <span style="font-weight: 700; font-size: 12px; color: ${qualifiesForRefund ? '#15803d' : '#b91c1c'};">
+              ${qualifiesForRefund ? '● Eligible for Refund' : '○ Non-Refundable'}
+            </span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px; line-height: 1.5; color: #404040; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px 14px;">
+          <div style="display: flex; align-items: flex-start; gap: 8px;">
+            <span style="color: #171717; font-weight: bold; flex-shrink: 0; margin-top: 1px;">•</span>
+            <div>
+              <strong style="color: #171717;">Cancellation Window:</strong>
+              <div style="color: #525252; font-size: 11.5px; margin-top: 1px;">
+                ${qualifiesForRefund 
+                  ? `Self-cancellation is available until <strong>${deadlineText}</strong>.`
+                  : `The 2-hour window ended on <strong>${deadlineText}</strong>.`}
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: flex-start; gap: 8px;">
+            <span style="color: #171717; font-weight: bold; flex-shrink: 0; margin-top: 1px;">•</span>
+            <div>
+              <strong style="color: #171717;">Refund Policy:</strong>
+              <div style="color: #525252; font-size: 11.5px; margin-top: 1px;">
+                Orders cancelled within 2 hours are <strong>automatically refunded</strong> if paid. Cancellations after 2 hours are <strong>non-refundable</strong>.
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: flex-start; gap: 8px;">
+            <span style="color: #171717; font-weight: bold; flex-shrink: 0; margin-top: 1px;">•</span>
+            <div>
+              <strong style="color: #171717;">Inventory Restoration:</strong>
+              <div style="color: #525252; font-size: 11.5px; margin-top: 1px;">
+                All items in this order will be released and returned to store inventory immediately.
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: flex-start; gap: 8px;">
+            <span style="color: #171717; font-weight: bold; flex-shrink: 0; margin-top: 1px;">•</span>
+            <div>
+              <strong style="color: #171717;">Confirmation Notice:</strong>
+              <div style="color: #525252; font-size: 11.5px; margin-top: 1px;">
+                This action is permanent and cannot be undone once confirmed.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
 
     const result = await ConfirmDialog.fire({
-      title: 'Cancel Order?',
-      text: confirmText,
+      title: `Cancel Order #${order.id}?`,
+      html: cancelHtml,
       confirmButtonText: 'Yes, Cancel Order',
       cancelButtonText: 'Keep Order',
+      width: '520px',
     });
 
     if (!result.isConfirmed) return;
@@ -407,8 +469,9 @@ export default function OrderDetailPage() {
     setCancelling(true);
     try {
       await cancelOrder(id);
-      Toast.fire({
-        title: 'Order cancelled successfully',
+      await AlertDialog.fire({
+        title: 'Order Cancelled',
+        text: `Order #${id} has been cancelled successfully.`,
       });
       await fetchOrder();
     } catch (err) {
@@ -496,50 +559,64 @@ export default function OrderDetailPage() {
           {/* Cancellation Notice Banner (Shown ONLY for PENDING orders) */}
           {isPending && (
             qualifiesForCancel ? (
-              <div className="border border-line bg-white p-3.5 flex items-center gap-3 text-xs text-muted shadow-surface mb-4">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  className="text-ink flex-shrink-0"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                <div>
-                  <span className="font-bold text-ink block">
-                    Cancellation allowed until: {formattedDeadline}
-                  </span>
-                  <span className="text-[11px] text-muted">
-                    You can self-cancel this order within 2 hours of placement. Cancellation will expire after this date.
-                  </span>
+              <div className="border border-line bg-white p-4 text-xs shadow-surface mb-4">
+                <div className="flex items-center gap-2 pb-2.5 mb-2.5 border-b border-line text-ink font-bold">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="flex-shrink-0"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <span className="uppercase tracking-wider text-[11px]">Cancellation Policy &amp; Terms</span>
+                </div>
+                <div className="space-y-2 text-[11.5px] text-muted">
+                  <div className="flex items-center justify-between gap-2 border-b border-line/50 pb-1.5">
+                    <span className="font-semibold text-ink">Window Deadline:</span>
+                    <span className="font-mono font-bold text-ink">{formattedDeadline}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 border-b border-line/50 pb-1.5">
+                    <span className="font-semibold text-ink">Refund Status:</span>
+                    <span className="text-emerald-700 font-bold">100% Automatic Refund (within 2 hours)</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-ink">After 2 Hours:</span>
+                    <span className="text-neutral-600">Payments become non-refundable</span>
+                  </div>
                 </div>
               </div>
             ) : (
-              <div className="border border-line bg-neutral-100/70 p-3.5 flex items-center gap-3 text-xs text-muted shadow-surface mb-4">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  className="text-muted flex-shrink-0"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-                <div>
-                  <span className="font-bold text-ink block">
-                    Cancellation expired: {formattedDeadline}
-                  </span>
-                  <span className="text-[11px] text-muted">
-                    The 2-hour cancellation window has ended. You can no longer self-cancel this order.
-                  </span>
+              <div className="border border-line bg-neutral-50 p-4 text-xs shadow-surface mb-4">
+                <div className="flex items-center gap-2 pb-2.5 mb-2.5 border-b border-line text-neutral-600 font-bold">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="flex-shrink-0"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                  <span className="uppercase tracking-wider text-[11px]">Cancellation Window Expired</span>
+                </div>
+                <div className="space-y-2 text-[11.5px] text-muted">
+                  <div className="flex items-center justify-between gap-2 border-b border-line/50 pb-1.5">
+                    <span className="font-semibold text-ink">Window Ended:</span>
+                    <span className="font-mono font-bold text-ink">{formattedDeadline}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-ink">Refund Status:</span>
+                    <span className="text-neutral-600">Non-refundable (exceeded 2-hour window)</span>
+                  </div>
                 </div>
               </div>
             )

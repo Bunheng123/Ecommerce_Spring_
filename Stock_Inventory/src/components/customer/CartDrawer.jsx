@@ -20,6 +20,11 @@ export default function CartDrawer() {
     navigate('/checkout');
   };
 
+  const handleProductClick = (productId) => {
+    closeDrawer();
+    navigate(`/product/${productId}`);
+  };
+
   return (
     <div className="relative z-[9999]">
       {/* Dark Backdrop */}
@@ -79,74 +84,99 @@ export default function CartDrawer() {
             </div>
           ) : (
             <div className="divide-y divide-line">
-              {items.map((item) => (
-                <div key={item.id} className="p-4 flex gap-4 items-start">
-                  {/* Thumbnail */}
-                  <div className="w-16 h-16 flex-shrink-0 bg-[#FAFAFA] border border-line flex items-center justify-center p-1.5">
-                    {item.productImageUrl ? (
-                      <img
-                        src={item.productImageUrl}
-                        alt={item.productName}
-                        className="h-full w-full object-contain"
-                      />
-                    ) : (
-                      <span className="text-[8px] uppercase font-bold text-subtle">
-                        No Img
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Info & Quantity */}
-                  <div className="flex-1 min-w-0 flex flex-col justify-between h-full gap-2">
-                    <div>
-                      {/* Clean Unit Price without discount */}
-                      <span className="text-xs font-bold text-ink">
-                        ${Number(item.price).toFixed(2)}
-                      </span>
-                      <h3 className="text-xs font-bold text-ink leading-snug line-clamp-2 mt-0.5">
-                        {item.productName}
-                      </h3>
-                      {item.variantDetails && (
-                        <p className="text-[10px] text-muted line-clamp-1 mt-0.5">
-                          {item.variantDetails}
-                        </p>
+              {items.map((item) => {
+                const targetProductId = item.productId || item.id;
+                return (
+                  <div key={item.id} className="p-4 flex gap-4 items-start">
+                    {/* Clickable Thumbnail */}
+                    <button
+                      type="button"
+                      onClick={() => handleProductClick(targetProductId)}
+                      className="w-16 h-16 flex-shrink-0 bg-[#FAFAFA] border border-line hover:border-ink transition-colors flex items-center justify-center p-1.5 cursor-pointer"
+                      title={`View ${item.productName}`}
+                    >
+                      {item.productImageUrl ? (
+                        <img
+                          src={item.productImageUrl}
+                          alt={item.productName}
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-[8px] uppercase font-bold text-subtle">
+                          No Img
+                        </span>
                       )}
-                    </div>
+                    </button>
 
-                    {/* Stepper & Remove */}
-                    <div className="flex items-center justify-between pt-1">
-                      <div className="inline-flex items-center border border-line bg-white">
-                        <button
-                          type="button"
-                          disabled={item.quantity <= 1}
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          className="px-2.5 py-1 text-xs text-ink hover:bg-neutral-100 disabled:opacity-30 cursor-pointer"
-                        >
-                          −
-                        </button>
-                        <span className="px-2.5 py-1 text-xs font-bold text-ink min-w-[22px] text-center">
-                          {item.quantity}
+                    {/* Info & Quantity */}
+                    <div className="flex-1 min-w-0 flex flex-col justify-between h-full gap-2">
+                      <div>
+                        {/* Clean Unit Price without discount */}
+                        <span className="text-xs font-bold text-ink">
+                          ${Number(item.price).toFixed(2)}
                         </span>
                         <button
                           type="button"
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="px-2.5 py-1 text-xs text-ink hover:bg-neutral-100 cursor-pointer"
+                          onClick={() => handleProductClick(targetProductId)}
+                          className="text-left text-xs font-bold text-ink leading-snug line-clamp-2 mt-0.5 hover:underline cursor-pointer block"
+                          title={`View ${item.productName}`}
                         >
-                          +
+                          {item.productName}
                         </button>
+                        {item.variantDetails && (
+                          <p className="text-[10px] text-muted line-clamp-1 mt-0.5">
+                            {item.variantDetails}
+                          </p>
+                        )}
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => removeItem(item.id)}
-                        className="text-[11px] font-bold uppercase tracking-wider text-muted hover:text-ink underline cursor-pointer"
-                      >
-                        Remove
-                      </button>
+                      {/* Stepper & Remove */}
+                      <div className="flex items-center justify-between pt-1">
+                        <div
+                          className="inline-flex items-center border border-line bg-white"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            disabled={item.quantity <= 1}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateQuantity(item.id, item.quantity - 1);
+                            }}
+                            className="px-2.5 py-1 text-xs text-ink hover:bg-neutral-100 disabled:opacity-30 cursor-pointer"
+                          >
+                            −
+                          </button>
+                          <span className="px-2.5 py-1 text-xs font-bold text-ink min-w-[22px] text-center">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateQuantity(item.id, item.quantity + 1);
+                            }}
+                            className="px-2.5 py-1 text-xs text-ink hover:bg-neutral-100 cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeItem(item.id);
+                          }}
+                          className="text-[11px] font-bold uppercase tracking-wider text-muted hover:text-ink underline cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

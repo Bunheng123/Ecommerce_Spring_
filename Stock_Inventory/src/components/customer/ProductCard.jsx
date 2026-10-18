@@ -34,18 +34,24 @@ export default function ProductCard({
     badgeType = 'black',
   } = item;
 
-  // Auto-determine badge from Spring Boot fields if explicit badge is omitted
-  const computedBadge =
-    item.badge ||
-    (stock === 0
-      ? 'Sold out'
-      : stock != null && reorderLevel != null && stock <= reorderLevel
-      ? 'Low stock'
-      : !active
-      ? 'Archived'
-      : null);
+  const numStock = Number(stock ?? 0);
+  const threshold = (reorderLevel != null && reorderLevel > 0) ? reorderLevel : 5;
+  const isSoldOut = stock === 0 || numStock <= 0;
+  const isLowStock = !isSoldOut && (numStock <= threshold || numStock <= 5);
 
-  const soldOut = computedBadge === 'Sold out' || stock === 0;
+  // Auto-determine retail scarcity badge
+  let computedBadge = item.badge || null;
+  if (!computedBadge) {
+    if (!active) {
+      computedBadge = 'Archived';
+    } else if (isSoldOut) {
+      computedBadge = 'Out of Stock';
+    } else if (isLowStock) {
+      computedBadge = `Only ${numStock} left`;
+    }
+  }
+
+  const soldOut = isSoldOut || computedBadge === 'Out of Stock' || computedBadge === 'Sold out';
   const inWishlist = isInWishlist(id);
   const btn =
     'flex h-[38px] items-center justify-center text-xs font-bold uppercase tracking-[0.08em] transition-colors';
@@ -62,6 +68,13 @@ export default function ProductCard({
     if (soldOut) {
       return (
         <span className="absolute left-3 top-3 border border-line bg-chip px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-ink">
+          Out of Stock
+        </span>
+      );
+    }
+    if (isLowStock) {
+      return (
+        <span className="absolute left-3 top-3 border border-ink bg-white px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-ink shadow-2xs">
           {computedBadge}
         </span>
       );
@@ -149,8 +162,8 @@ export default function ProductCard({
               ${Number(price).toFixed(2)}
             </p>
             {stock != null && (
-              <span className="text-[10px] uppercase tracking-wider text-muted">
-                {soldOut ? 'Out of stock' : `${stock} in stock`}
+              <span className={`text-[10px] uppercase tracking-wider ${isLowStock ? 'font-bold text-neutral-900' : 'text-muted'}`}>
+                {soldOut ? 'Out of stock' : (isLowStock ? `Only ${numStock} left` : 'In stock')}
               </span>
             )}
           </div>

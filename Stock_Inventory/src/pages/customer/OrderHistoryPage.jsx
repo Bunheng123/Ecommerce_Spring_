@@ -5,7 +5,10 @@ import {
   formatPaymentStatus,
   formatOrderStatus,
   canCancelOrder,
+  getCancelDeadline,
+  formatDeadlineDate,
 } from '../../components/OrderReceipt';
+import { ConfirmDialog, AlertDialog } from '../../admin/utils/swalConfig';
 
 /**
  * Formats a short preview of the order's items
@@ -28,16 +31,21 @@ export default function OrderHistoryPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState(null);
-  const [confirmCancelId, setConfirmCancelId] = useState(null);
-  const [cancelError, setCancelError] = useState('');
-  const [cancelSuccessMsg, setCancelSuccessMsg] = useState('');
 
   const loadOrders = async () => {
     setLoading(true);
-    setCancelError('');
     try {
       const data = await getMyOrders();
-      setOrders(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? [...data] : [];
+      // Default descending order by orderDate, id as tie breaker
+      list.sort((a, b) => {
+        if (a.orderDate && b.orderDate) {
+          const diff = new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime();
+          if (diff !== 0) return diff;
+        }
+        return Number(b.id || 0) - Number(a.id || 0);
+      });
+      setOrders(list);
     } catch (err) {
       console.warn('Failed to load orders:', err);
       setOrders([]);
@@ -50,20 +58,101 @@ export default function OrderHistoryPage() {
     loadOrders();
   }, []);
 
-  const handleConfirmCancel = async (orderId) => {
-    setCancelError('');
-    setCancelSuccessMsg('');
-    setCancellingId(orderId);
+  const handleCancelClick = async (order) => {
+    const qualifiesForRefund = canCancelOrder(order);
+    const cancelDeadline = getCancelDeadline(order.orderDate);
+    const deadlineText = cancelDeadline ? formatDeadlineDate(cancelDeadline) : '';
+
+    const cancelHtml = `
+      <div style="text-align: left; font-size: 12px; color: #171717; margin-top: 4px;">
+        <div style="background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e5e5; padding-bottom: 6px; margin-bottom: 6px;">
+            <span style="font-size: 11px; font-weight: 700; color: #737373; text-transform: uppercase; letter-spacing: 0.05em;">Order Reference</span>
+            <span style="font-family: monospace; font-weight: 700; font-size: 13px; color: #171717;">#${order.id}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e5e5; padding-bottom: 6px; margin-bottom: 6px;">
+            <span style="font-size: 11px; font-weight: 700; color: #737373; text-transform: uppercase; letter-spacing: 0.05em;">Deadline</span>
+            <span style="font-weight: 600; font-size: 12px; color: #171717;">${deadlineText || 'Within 2 hours of placement'}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 11px; font-weight: 700; color: #737373; text-transform: uppercase; letter-spacing: 0.05em;">Refund Status</span>
+            <span style="font-weight: 700; font-size: 12px; color: ${qualifiesForRefund ? '#15803d' : '#b91c1c'};">
+              ${qualifiesForRefund ? '● Eligible for Refund' : '○ Non-Refundable'}
+            </span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px; line-height: 1.5; color: #404040; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px 14px;">
+          <div style="display: flex; align-items: flex-start; gap: 8px;">
+            <span style="color: #171717; font-weight: bold; flex-shrink: 0; margin-top: 1px;">•</span>
+            <div>
+              <strong style="color: #171717;">Cancellation Window:</strong>
+              <div style="color: #525252; font-size: 11.5px; margin-top: 1px;">
+                ${qualifiesForRefund 
+                  ? `Self-cancellation is available until <strong>${deadlineText}</strong>.`
+                  : `The 2-hour window ended on <strong>${deadlineText}</strong>.`}
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: flex-start; gap: 8px;">
+            <span style="color: #171717; font-weight: bold; flex-shrink: 0; margin-top: 1px;">•</span>
+            <div>
+              <strong style="color: #171717;">Refund Policy:</strong>
+              <div style="color: #525252; font-size: 11.5px; margin-top: 1px;">
+                Orders cancelled within 2 hours are <strong>automatically refunded</strong> if paid. Cancellations after 2 hours are <strong>non-refundable</strong>.
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: flex-start; gap: 8px;">
+            <span style="color: #171717; font-weight: bold; flex-shrink: 0; margin-top: 1px;">•</span>
+            <div>
+              <strong style="color: #171717;">Inventory Restoration:</strong>
+              <div style="color: #525252; font-size: 11.5px; margin-top: 1px;">
+                All items in this order will be released and returned to store inventory immediately.
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: flex-start; gap: 8px;">
+            <span style="color: #171717; font-weight: bold; flex-shrink: 0; margin-top: 1px;">•</span>
+            <div>
+              <strong style="color: #171717;">Confirmation Notice:</strong>
+              <div style="color: #525252; font-size: 11.5px; margin-top: 1px;">
+                This action is permanent and cannot be undone once confirmed.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const result = await ConfirmDialog.fire({
+      title: `Cancel Order #${order.id}?`,
+      html: cancelHtml,
+      confirmButtonText: 'Yes, Cancel Order',
+      cancelButtonText: 'Keep Order',
+      width: '520px',
+    });
+
+    if (!result.isConfirmed) return;
+
+    setCancellingId(order.id);
     try {
-      await cancelOrder(orderId);
-      setConfirmCancelId(null);
-      setCancelSuccessMsg(`Order #${orderId} has been successfully cancelled.`);
-      // Re-fetch the orders from backend immediately based on actual response
+      await cancelOrder(order.id);
+      await AlertDialog.fire({
+        title: 'Order Cancelled',
+        text: `Order #${order.id} has been cancelled successfully.`,
+      });
       await loadOrders();
     } catch (err) {
       console.error('Failed to cancel order:', err);
       const msg = err.response?.data?.message || err.message || 'Unable to cancel order';
-      setCancelError(msg.replace(/^Error\s*:\s*/i, ''));
+      await AlertDialog.fire({
+        title: 'Cancellation Failed',
+        text: typeof msg === 'string' ? msg.replace(/^Error\s*:\s*/i, '') : 'Unable to cancel order',
+      });
     } finally {
       setCancellingId(null);
     }
@@ -104,20 +193,6 @@ export default function OrderHistoryPage() {
             <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
           </button>
         </div>
-
-        {cancelSuccessMsg && (
-          <div className="mb-6 p-3 border border-emerald-300 bg-emerald-50 text-emerald-800 text-xs font-semibold animate-fadeIn flex items-center gap-2">
-            <span>✓</span>
-            <span>{cancelSuccessMsg}</span>
-          </div>
-        )}
-
-        {cancelError && (
-          <div className="mb-6 p-3 border border-red-300 bg-red-50 text-red-700 text-xs font-semibold animate-fadeIn flex items-center gap-2">
-            <span>⚠</span>
-            <span>{cancelError}</span>
-          </div>
-        )}
 
         {/* Loading State (based on real time that fetching takes) */}
         {loading ? (
@@ -207,34 +282,14 @@ export default function OrderHistoryPage() {
                         </Link>
 
                         {qualifiesForCancel && (
-                          confirmCancelId === order.id ? (
-                            <div className="inline-flex items-center gap-2 text-[10px] whitespace-nowrap bg-neutral-50 px-2.5 py-1.5 border border-line">
-                              <span className="text-ink font-bold">Cancel?</span>
-                              <button
-                                type="button"
-                                disabled={cancellingId === order.id}
-                                onClick={() => handleConfirmCancel(order.id)}
-                                className="font-bold uppercase text-red-600 hover:underline cursor-pointer disabled:opacity-50"
-                              >
-                                {cancellingId === order.id ? 'Voiding...' : 'Yes, Cancel'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmCancelId(null)}
-                                className="font-bold uppercase text-muted hover:text-ink cursor-pointer"
-                              >
-                                No
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmCancelId(order.id)}
-                              className="px-3 py-2 border border-red-300 text-red-600 hover:bg-red-50 text-[10px] font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer"
-                            >
-                              CANCEL ORDER
-                            </button>
-                          )
+                          <button
+                            type="button"
+                            disabled={cancellingId === order.id}
+                            onClick={() => handleCancelClick(order)}
+                            className="px-3.5 py-2 border border-red-300 text-red-600 hover:bg-red-50 text-[10px] font-bold uppercase tracking-wider transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50"
+                          >
+                            {cancellingId === order.id ? 'Cancelling...' : 'Cancel Order'}
+                          </button>
                         )}
                       </div>
                     </div>

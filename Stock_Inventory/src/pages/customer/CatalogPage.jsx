@@ -105,7 +105,17 @@ export default function CatalogPage() {
     fetchCatalogProducts(params)
       .then((res) => {
         if (!isMounted) return;
-        setProducts(res.content || []);
+        const list = Array.isArray(res.content) ? [...res.content] : [];
+        if (sortBy === 'newest') {
+          list.sort((a, b) => {
+            if (a.createdAt && b.createdAt) {
+              const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+              if (diff !== 0) return diff;
+            }
+            return Number(b.id || 0) - Number(a.id || 0);
+          });
+        }
+        setProducts(list);
         setPageData({
           totalElements: res.totalElements ?? 0,
           totalPages: Math.max(1, res.totalPages ?? 1),

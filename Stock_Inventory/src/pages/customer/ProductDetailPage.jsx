@@ -103,14 +103,12 @@ export default function ProductDetailPage() {
     description = "",
     price = 0,
     imageUrl,
-    publicId,
     stock = 0,
-    active = true,
-    costPrice,
     reorderLevel = 0,
     categoryId,
     categoryName = "GENERAL",
     galleryImageUrls = [],
+    publicId,
   } = product || {};
 
   // Consolidate all normalized images (primary + gallery + api images)
@@ -232,8 +230,10 @@ export default function ProductDetailPage() {
     setSelectedImage(allImages[nextIdx]);
   };
 
-  const isSoldOut = stock <= 0;
-  const isLowStock = stock > 0 && reorderLevel != null && stock <= reorderLevel;
+  const numStock = Number(stock || 0);
+  const threshold = (reorderLevel != null && reorderLevel > 0) ? reorderLevel : 5;
+  const isSoldOut = stock <= 0 || numStock <= 0;
+  const isLowStock = !isSoldOut && (numStock <= threshold || numStock <= 5);
 
   const handleAddToCart = async () => {
     setErrorMessage('');
@@ -295,15 +295,15 @@ export default function ProductDetailPage() {
               <div className="absolute top-4 left-4 flex flex-col gap-1.5 z-10">
                 {isSoldOut ? (
                   <span className="border border-line bg-chip px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
-                    Sold Out
+                    Out of Stock
                   </span>
                 ) : isLowStock ? (
-                  <span className="border border-ink bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
-                    Low Stock: {stock} Left
+                  <span className="border border-ink bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-ink shadow-2xs">
+                    Only {stock} left in stock
                   </span>
                 ) : (
                   <span className="bg-ink px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white">
-                    In Stock ({stock})
+                    In Stock
                   </span>
                 )}
               </div>
@@ -408,33 +408,26 @@ export default function ProductDetailPage() {
                   "Crafted with precision engineering and intentional functional aesthetics for daily living."}
               </p>
 
-              {/* Inventory Stock Indicator */}
-              <div className="p-3 border border-line bg-surface text-xs flex flex-col gap-1">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold uppercase tracking-wider text-ink text-[11px]">
-                    Warehouse Status:
-                  </span>
-                  <span
-                    className={`font-bold uppercase text-[11px] tracking-wider ${
-                      isSoldOut
-                        ? "text-red-600"
-                        : isLowStock
-                          ? "text-amber-600"
-                          : "text-emerald-700"
-                    }`}
-                  >
-                    {isSoldOut
-                      ? "Out of Stock"
+              {/* Availability Indicator */}
+              <div className="p-3 border border-line bg-surface text-xs flex items-center justify-between">
+                <span className="font-bold uppercase tracking-wider text-muted text-[11px]">
+                  Availability
+                </span>
+                <span
+                  className={`font-bold uppercase text-[11px] tracking-wider ${
+                    isSoldOut
+                      ? "text-neutral-500"
                       : isLowStock
-                        ? `Low Inventory (${stock} remaining)`
-                        : `In Stock (${stock} available)`}
-                  </span>
-                </div>
-                {reorderLevel > 0 && (
-                  <p className="text-[10px] text-muted tracking-tight">
-                    Automatic reorder threshold: {reorderLevel} units
-                  </p>
-                )}
+                        ? "text-ink font-black"
+                        : "text-ink"
+                  }`}
+                >
+                  {isSoldOut
+                    ? "Out of Stock"
+                    : isLowStock
+                      ? `Only ${stock} left in stock`
+                      : "In Stock"}
+                </span>
               </div>
 
               {/* Quantity Selector & CTAs */}
@@ -540,13 +533,13 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* Specifications & API Structure Details Tabs */}
+        {/* Product Details Tabs (Description, Specifications, Shipping) */}
         <section className="mt-12 border border-line bg-white p-6 md:p-8 shadow-surface">
           <div className="flex gap-6 border-b border-line pb-4">
             <button
               type="button"
               onClick={() => setActiveTab("description")}
-              className={`text-xs font-bold uppercase tracking-[0.12em] pb-1 transition-colors ${
+              className={`text-xs font-bold uppercase tracking-[0.12em] pb-1 transition-colors cursor-pointer ${
                 activeTab === "description"
                   ? "border-b-2 border-ink text-ink"
                   : "text-muted hover:text-ink"
@@ -556,19 +549,19 @@ export default function ProductDetailPage() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab("apiData")}
-              className={`text-xs font-bold uppercase tracking-[0.12em] pb-1 transition-colors ${
-                activeTab === "apiData"
+              onClick={() => setActiveTab("specs")}
+              className={`text-xs font-bold uppercase tracking-[0.12em] pb-1 transition-colors cursor-pointer ${
+                activeTab === "specs"
                   ? "border-b-2 border-ink text-ink"
                   : "text-muted hover:text-ink"
               }`}
             >
-              Backend API Schema
+              Details &amp; Specs
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("shipping")}
-              className={`text-xs font-bold uppercase tracking-[0.12em] pb-1 transition-colors ${
+              className={`text-xs font-bold uppercase tracking-[0.12em] pb-1 transition-colors cursor-pointer ${
                 activeTab === "shipping"
                   ? "border-b-2 border-ink text-ink"
                   : "text-muted hover:text-ink"
@@ -590,66 +583,25 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {activeTab === "apiData" && (
-              <div className="space-y-4">
-                <p className="text-xs text-muted uppercase tracking-wider">
-                  Direct mapping with Spring Boot{" "}
-                  <code className="bg-neutral-100 px-1 py-0.5 font-mono text-ink">
-                    ProductResponseDto
-                  </code>
-                  :
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs font-mono">
-                  <div className="border border-line p-3 bg-surface">
-                    <span className="text-muted block text-[10px]">id: Long</span>
-                    <span className="font-bold text-ink">{prodId}</span>
+            {activeTab === "specs" && (
+              <div className="space-y-4 max-w-2xl">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="border border-line p-3.5 bg-surface">
+                    <span className="text-muted block text-[10px] font-bold uppercase tracking-wider">Brand</span>
+                    <span className="font-bold text-ink mt-0.5 block">{brand || "Essential Hardware"}</span>
                   </div>
-                  <div className="border border-line p-3 bg-surface">
-                    <span className="text-muted block text-[10px]">name: String</span>
-                    <span className="font-bold text-ink">{name}</span>
+                  <div className="border border-line p-3.5 bg-surface">
+                    <span className="text-muted block text-[10px] font-bold uppercase tracking-wider">Category</span>
+                    <span className="font-bold text-ink mt-0.5 block">{categoryName || "Hardware"}</span>
                   </div>
-                  <div className="border border-line p-3 bg-surface">
-                    <span className="text-muted block text-[10px]">brand: String</span>
-                    <span className="font-bold text-ink">{brand || "null"}</span>
+                  <div className="border border-line p-3.5 bg-surface">
+                    <span className="text-muted block text-[10px] font-bold uppercase tracking-wider">Catalog Reference</span>
+                    <span className="font-mono font-bold text-ink mt-0.5 block">ART-{String(prodId || id || 0).padStart(4, '0')}</span>
                   </div>
-                  <div className="border border-line p-3 bg-surface">
-                    <span className="text-muted block text-[10px]">price: Double</span>
-                    <span className="font-bold text-ink">
-                      ${Number(price).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="border border-line p-3 bg-surface">
-                    <span className="text-muted block text-[10px]">stock: int</span>
-                    <span className="font-bold text-ink">{stock} units</span>
-                  </div>
-                  <div className="border border-line p-3 bg-surface">
-                    <span className="text-muted block text-[10px]">costPrice: Double</span>
-                    <span className="font-bold text-ink">
-                      ${Number(costPrice ?? price * 0.6).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="border border-line p-3 bg-surface">
-                    <span className="text-muted block text-[10px]">reorderLevel: int</span>
-                    <span className="font-bold text-ink">
-                      {reorderLevel} units
-                    </span>
-                  </div>
-                  <div className="border border-line p-3 bg-surface">
-                    <span className="text-muted block text-[10px]">active: boolean</span>
-                    <span className="font-bold text-ink">{String(active)}</span>
-                  </div>
-                  <div className="border border-line p-3 bg-surface">
-                    <span className="text-muted block text-[10px]">
-                      categoryId / categoryName
-                    </span>
-                    <span className="font-bold text-ink">
-                      {categoryId ?? "—"} / {categoryName}
-                    </span>
-                  </div>
-                  <div className="border border-line p-3 bg-surface">
-                    <span className="text-muted block text-[10px]">publicId: String</span>
-                    <span className="font-bold text-ink truncate block">
-                      {publicId || "null"}
+                  <div className="border border-line p-3.5 bg-surface">
+                    <span className="text-muted block text-[10px] font-bold uppercase tracking-wider">Availability</span>
+                    <span className="font-bold text-ink mt-0.5 block">
+                      {isSoldOut ? "Out of Stock" : (isLowStock ? `Only ${stock} left in stock` : "In Stock")}
                     </span>
                   </div>
                 </div>

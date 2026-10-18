@@ -43,7 +43,10 @@ const COPY = {
 const toCard = (p) => {
   const stock = p.stock ?? p.quantity ?? null;
   const category = p.category?.name ?? p.categoryName ?? 'HARDWARE';
-  const low = p.reorderLevel != null && stock != null && stock > 0 && stock <= p.reorderLevel;
+  const numStock = Number(stock ?? 0);
+  const threshold = (p.reorderLevel != null && p.reorderLevel > 0) ? p.reorderLevel : 5;
+  const isSoldOut = stock === 0 || numStock <= 0;
+  const isLowStock = !isSoldOut && (numStock <= threshold || numStock <= 5);
   return {
     ...p,
     id: p.id,
@@ -58,7 +61,7 @@ const toCard = (p) => {
     categoryName: category,
     galleryImageUrls: p.galleryImageUrls,
     label: p.label || `${category.toUpperCase()} / ${String(p.id).padStart(2, '0')}`,
-    badge: p.badge || (stock === 0 ? 'Sold out' : low ? 'Low stock' : null),
+    badge: p.badge || (isSoldOut ? 'Out of stock' : isLowStock ? `Only ${numStock} left` : null),
   };
 };
 
@@ -105,7 +108,14 @@ export default function HomePage() {
     fetchProducts()
       .then((data) => {
         if (Array.isArray(data)) {
-          setProducts(data.map(toCard));
+          const sorted = [...data].sort((a, b) => {
+            if (a.createdAt && b.createdAt) {
+              const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+              if (diff !== 0) return diff;
+            }
+            return Number(b.id || 0) - Number(a.id || 0);
+          });
+          setProducts(sorted.map(toCard));
         }
       })
       .catch((err) => {

@@ -80,6 +80,12 @@ export default function ProductsPage() {
       }
 
       return matchesSearch && matchesCategory && matchesBrand;
+    }).sort((a, b) => {
+      if (a.createdAt && b.createdAt) {
+        const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        if (diff !== 0) return diff;
+      }
+      return Number(b.id || 0) - Number(a.id || 0);
     });
   }, [products, search, categoryFilter, brandFilter, brands]);
 
@@ -249,9 +255,13 @@ export default function ProductsPage() {
 
       <div className="bg-white border border-neutral-200/80 rounded-3xl p-6 md:p-8 shadow-surface">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-6 border-b border-neutral-100">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-black uppercase tracking-tight text-neutral-900">Product Catalog</h2>
-            <span className="text-xs font-black bg-neutral-100 text-neutral-700 px-3 py-1 rounded-full border border-neutral-200">{filtered.length} Items</span>
+          <div className="flex items-center gap-3 shrink-0">
+            <h2 className="text-lg font-bold uppercase tracking-tight text-neutral-900 whitespace-nowrap">
+              Product Catalog
+            </h2>
+            <span className="text-xs font-bold bg-neutral-100 text-neutral-700 px-3 py-1 rounded-full border border-neutral-200 whitespace-nowrap">
+              {filtered.length} Items
+            </span>
             {(search || categoryFilter !== 'ALL' || brandFilter !== 'ALL' || stockFilter !== 'ALL') && (
               <button
                 type="button"
@@ -262,23 +272,23 @@ export default function ProductsPage() {
                   setStockFilter('ALL');
                   resetPaging();
                 }}
-                className="text-[11px] font-bold text-neutral-500 hover:text-neutral-900 underline cursor-pointer"
+                className="text-[11px] font-bold text-neutral-500 hover:text-neutral-900 underline cursor-pointer whitespace-nowrap ml-1"
               >
                 Reset Filters
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 w-full xl:w-auto">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 w-full xl:w-auto">
             <input
               value={search}
               onChange={(event) => { setSearch(event.target.value); resetPaging(); }}
               placeholder="Search products..."
-              className="h-10 min-w-56 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-3 outline-none focus:border-neutral-900 focus:bg-white"
+              className="h-10 flex-1 min-w-[180px] max-w-xs bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-3 outline-none focus:border-neutral-900 focus:bg-white"
             />
             <select
               value={categoryFilter}
               onChange={(event) => { setCategoryFilter(event.target.value); resetPaging(); }}
-              className="h-10 min-w-44 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-3 outline-none focus:border-neutral-900 focus:bg-white cursor-pointer"
+              className="h-10 w-40 shrink-0 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-2.5 outline-none focus:border-neutral-900 focus:bg-white cursor-pointer"
             >
               <option value="ALL">All Categories</option>
               {categories.map((category) => (
@@ -290,7 +300,7 @@ export default function ProductsPage() {
             <select
               value={brandFilter}
               onChange={(event) => { setBrandFilter(event.target.value); resetPaging(); }}
-              className="h-10 min-w-44 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-3 outline-none focus:border-neutral-900 focus:bg-white cursor-pointer"
+              className="h-10 w-40 shrink-0 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-2.5 outline-none focus:border-neutral-900 focus:bg-white cursor-pointer"
             >
               <option value="ALL">All Brands</option>
               <option value="UNBRANDED">No Brand / Unbranded</option>
@@ -303,7 +313,7 @@ export default function ProductsPage() {
             <select
               value={stockFilter}
               onChange={(event) => { setStockFilter(event.target.value); resetPaging(); }}
-              className="h-10 min-w-36 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-3 outline-none focus:border-neutral-900 focus:bg-white cursor-pointer"
+              className="h-10 w-32 shrink-0 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-2.5 outline-none focus:border-neutral-900 focus:bg-white cursor-pointer"
             >
               <option value="ALL">All Stock</option>
               <option value="LOW">Low Stock</option>
