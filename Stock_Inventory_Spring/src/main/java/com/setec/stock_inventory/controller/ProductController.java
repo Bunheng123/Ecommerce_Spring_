@@ -3,6 +3,7 @@ package com.setec.stock_inventory.controller;
 import com.setec.stock_inventory.dto.ApiResponse;
 import com.setec.stock_inventory.dto.Request.ProductRequestDto;
 import com.setec.stock_inventory.dto.Request.StockAdjustmentRequestDto;
+import com.setec.stock_inventory.dto.Response.PageResponseDto;
 import com.setec.stock_inventory.dto.Response.ProductImageResponseDto;
 import com.setec.stock_inventory.dto.Response.ProductResponseDto;
 import com.setec.stock_inventory.service.ProductService;
@@ -26,6 +27,30 @@ public class ProductController {
 
     public ProductController(ProductService productService) {
         this.productService = productService;
+    }
+
+    @GetMapping("/brands")
+    public ResponseEntity<ApiResponse<List<String>>> getBrands() {
+        List<String> brands = productService.getAllBrands();
+        return ResponseEntity.ok(ApiResponse.success("Brands retrieved successfully", brands));
+    }
+
+    @GetMapping("/catalog")
+    public ResponseEntity<ApiResponse<PageResponseDto<ProductResponseDto>>> getCatalogProducts(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long brandId,
+            @RequestParam(required = false) String brand,
+            @RequestParam(required = false) Double minPrice,
+            @RequestParam(required = false) Double maxPrice,
+            @RequestParam(required = false, defaultValue = "newest") String sort,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "12") int size
+    ) {
+        PageResponseDto<ProductResponseDto> result = productService.getCatalogProducts(
+                search, categoryId, brandId, brand, minPrice, maxPrice, sort, page, size
+        );
+        return ResponseEntity.ok(ApiResponse.success("Catalog products retrieved successfully", result));
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

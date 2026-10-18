@@ -14,6 +14,9 @@ import java.time.LocalDateTime;
 public class ProductResponseDto {
     private Long id;
     private String name;
+    private Long brandId;
+    private String brandName;
+    private String brand;
     private String description;
     private Double price;
     private String imageUrl;

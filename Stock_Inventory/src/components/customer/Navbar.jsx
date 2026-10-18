@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import { useWishlist } from '../../context/WishlistContext';
 import AccountDrawer from '../AccountDrawer';
 
 export default function Navbar() {
   const navigate = useNavigate();
   const { openDrawer, itemCount } = useCart();
+  const { wishlistCount } = useWishlist();
   const { user } = useAuth();
   const [isAccountDrawerOpen, setIsAccountDrawerOpen] = useState(false);
 
@@ -54,6 +56,14 @@ export default function Navbar() {
           <Link to="/shop" className="hover:opacity-60 transition-opacity">
             SHOP
           </Link>
+          <Link to="/wishlist" className="hover:opacity-60 transition-opacity flex items-center gap-1.5">
+            <span>WISHLIST</span>
+            {wishlistCount > 0 && (
+              <span className="border border-ink bg-white px-1.5 py-0.2 text-[9px] font-bold text-ink">
+                {wishlistCount}
+              </span>
+            )}
+          </Link>
           <Link to="/orders" className="hover:opacity-60 transition-opacity">
             ORDER HISTORY
           </Link>
@@ -66,6 +76,22 @@ export default function Navbar() {
               <circle cx="7" cy="7" r="5" />
               <path d="M11 11L14.5 14.5" />
             </svg>
+          </Link>
+
+          {/* Wishlist Icon */}
+          <Link
+            to="/wishlist"
+            aria-label="Wishlist"
+            className="relative hover:opacity-60 transition-opacity cursor-pointer p-0.5"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+            {wishlistCount > 0 && (
+              <span className="absolute -top-1 -right-1.5 h-3.5 w-3.5 rounded-full bg-ink text-[8px] font-bold text-white flex items-center justify-center">
+                {wishlistCount}
+              </span>
+            )}
           </Link>
 
           <button

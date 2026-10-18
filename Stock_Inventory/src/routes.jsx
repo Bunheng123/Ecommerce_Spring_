@@ -9,6 +9,7 @@ import OrderDetailPage from './pages/customer/OrderDetailPage';
 import LoginPage from './pages/customer/LoginPage';
 import RegisterPage from './pages/customer/RegisterPage';
 import ProfilePage from './pages/customer/ProfilePage';
+import WishlistPage from './pages/customer/WishlistPage';
 import { useCart } from './context/CartContext';
 
 function CartRedirect() {
@@ -27,6 +28,7 @@ export default function AppRoutes() {
       <Route path="/" element={<HomePage />} />
       <Route path="/shop" element={<CatalogPage />} />
       <Route path="/product/:id" element={<ProductDetailPage />} />
+      <Route path="/products/:id" element={<ProductDetailPage />} />
       <Route path="/cart" element={<CartRedirect />} />
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/orders" element={<OrderHistoryPage />} />
@@ -34,6 +36,7 @@ export default function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/profile" element={<ProfilePage />} />
+      <Route path="/wishlist" element={<WishlistPage />} />
     </Routes>
   );
 }

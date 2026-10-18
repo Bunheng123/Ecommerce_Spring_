@@ -7,6 +7,9 @@ function unwrap(response) {
 function toProductFormData(data) {
   const formData = new FormData();
   formData.append('name', data.name?.trim() || '');
+  if (data.brandId !== undefined && data.brandId !== null && data.brandId !== '') {
+    formData.append('brandId', String(data.brandId));
+  }
   formData.append('description', data.description?.trim() || '');
   formData.append('price', String(Number(data.price || 0)));
   formData.append('stock', String(Number(data.stock || 0)));
@@ -17,6 +20,30 @@ function toProductFormData(data) {
     formData.append('file', data.file);
   }
   return formData;
+}
+
+export { fetchBrands } from './brands';
+
+export async function fetchCatalogProducts(params = {}) {
+  const queryParams = new URLSearchParams();
+  if (params.search?.trim()) queryParams.append('search', params.search.trim());
+  if (params.categoryId) queryParams.append('categoryId', params.categoryId);
+  if (params.brandId) queryParams.append('brandId', params.brandId);
+  if (params.brand?.trim()) queryParams.append('brand', params.brand.trim());
+  if (params.minPrice !== undefined && params.minPrice !== null && params.minPrice !== '') {
+    queryParams.append('minPrice', params.minPrice);
+  }
+  if (params.maxPrice !== undefined && params.maxPrice !== null && params.maxPrice !== '') {
+    queryParams.append('maxPrice', params.maxPrice);
+  }
+  if (params.sort) queryParams.append('sort', params.sort);
+  if (params.page !== undefined && params.page !== null) queryParams.append('page', params.page);
+  if (params.size) queryParams.append('size', params.size);
+
+  const qs = queryParams.toString();
+  const url = `/products/catalog${qs ? `?${qs}` : ''}`;
+  const response = await apiClient.get(url);
+  return unwrap(response);
 }
 
 export async function fetchProducts() {

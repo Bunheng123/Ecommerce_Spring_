@@ -59,8 +59,6 @@ const toCard = (p) => {
     galleryImageUrls: p.galleryImageUrls,
     label: p.label || `${category.toUpperCase()} / ${String(p.id).padStart(2, '0')}`,
     badge: p.badge || (stock === 0 ? 'Sold out' : low ? 'Low stock' : null),
-    rating: p.rating ?? 5,
-    reviews: p.reviews ?? 50,
   };
 };
 
@@ -104,7 +102,6 @@ export default function HomePage() {
   const { addItem } = useCart();
 
   useEffect(() => {
-    setLoading(true);
     fetchProducts()
       .then((data) => {
         if (Array.isArray(data)) {

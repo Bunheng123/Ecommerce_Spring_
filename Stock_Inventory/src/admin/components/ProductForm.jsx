@@ -4,6 +4,7 @@ export default function ProductForm({
   mode = 'create',
   initialData = null,
   categories = [],
+  brands = [],
   galleryImages = [],
   onSubmit,
   onCancel,
@@ -20,6 +21,7 @@ export default function ProductForm({
   const isEdit = mode === 'edit';
   const [formData, setFormData] = useState({
     name: '',
+    brandId: '',
     description: '',
     price: '',
     costPrice: '',
@@ -37,6 +39,7 @@ export default function ProductForm({
     if (initialData && (isEdit || isView)) {
       setFormData({
         name: initialData.name || '',
+        brandId: initialData.brandId ?? (initialData.brand?.id ?? ''),
         description: initialData.description || '',
         price: initialData.price ?? '',
         costPrice: initialData.costPrice ?? '',
@@ -49,6 +52,7 @@ export default function ProductForm({
     } else {
       setFormData({
         name: '',
+        brandId: '',
         description: '',
         price: '',
         costPrice: '',
@@ -174,11 +178,29 @@ export default function ProductForm({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
+            <div>
               <label className="block text-[10px] font-black uppercase tracking-wider text-neutral-700 mb-1">
                 Name {isView ? '' : '*'}
               </label>
               <input required={!isView} disabled={isView} value={formData.name} onChange={(event) => setFormData({ ...formData, name: event.target.value })} className={inputClass(isView)} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-wider text-neutral-700 mb-1">
+                Brand
+              </label>
+              <select
+                disabled={isView}
+                value={formData.brandId}
+                onChange={(event) => setFormData({ ...formData, brandId: event.target.value })}
+                className={inputClass(isView)}
+              >
+                <option value="">No Brand / Select Brand</option>
+                {brands.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-[10px] font-black uppercase tracking-wider text-neutral-700 mb-1">Category</label>

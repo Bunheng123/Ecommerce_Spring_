@@ -21,6 +21,8 @@ public class ProductRequestDto {
     @Size(max = 100 , message = "Product name must be less than 100 characters")
     private String name;
 
+    private Long brandId;
+
     @Size(max = 1000 , message = "description must be less than 1000 characters")
     private String description;
 

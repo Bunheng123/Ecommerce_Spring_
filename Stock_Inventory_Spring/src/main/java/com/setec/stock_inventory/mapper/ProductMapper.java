@@ -20,9 +20,15 @@ public class ProductMapper {
                 ? product.getGalleryImages().stream().map(ProductImage::getImageUrl).toList()
                 : Collections.emptyList();
 
+        Long brandId = product.getBrand() != null ? product.getBrand().getId() : null;
+        String brandName = product.getBrand() != null ? product.getBrand().getName() : null;
+
         return ProductResponseDto.builder()
                 .id(product.getId())
                 .name(product.getName())
+                .brandId(brandId)
+                .brandName(brandName)
+                .brand(brandName)
                 .description(product.getDescription())
                 .price(product.getPrice())
                 .imageUrl(product.getImageUrl())

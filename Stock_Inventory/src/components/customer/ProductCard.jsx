@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SAMPLE_PRODUCTS } from '../../data/previewProducts';
 import { useCart } from '../../context/CartContext';
+import { useWishlist } from '../../context/WishlistContext';
 
 // Default fallback sample item matching Spring Boot ProductResponseDto
 const DEFAULT_SAMPLE_CARD = SAMPLE_PRODUCTS[0];
@@ -10,12 +11,11 @@ const DEFAULT_SAMPLE_CARD = SAMPLE_PRODUCTS[0];
 // variant "compact" -> single full-width ADD TO CART button (recommendations carousel)
 export default function ProductCard({
   product = DEFAULT_SAMPLE_CARD,
-  variant = 'grid',
   onAdd,
-  onBuy,
 }) {
   const navigate = useNavigate();
   const { addItem } = useCart();
+  const { isInWishlist, toggleWishlist } = useWishlist();
   const [isAdding, setIsAdding] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const item = product || DEFAULT_SAMPLE_CARD;
@@ -23,6 +23,7 @@ export default function ProductCard({
   const {
     id = 1,
     name = 'Unnamed Product',
+    brand,
     price = 0,
     imageUrl,
     stock,
@@ -31,8 +32,6 @@ export default function ProductCard({
     categoryName,
     label = categoryName ? `${categoryName.toUpperCase()} / ${String(id).padStart(2, '0')}` : 'GENERAL / 01',
     badgeType = 'black',
-    rating = 5,
-    reviews = 50,
   } = item;
 
   // Auto-determine badge from Spring Boot fields if explicit badge is omitted
@@ -47,6 +46,7 @@ export default function ProductCard({
       : null);
 
   const soldOut = computedBadge === 'Sold out' || stock === 0;
+  const inWishlist = isInWishlist(id);
   const btn =
     'flex h-[38px] items-center justify-center text-xs font-bold uppercase tracking-[0.08em] transition-colors';
 
@@ -76,42 +76,73 @@ export default function ProductCard({
   return (
     <article className="flex h-full flex-col justify-between border border-line bg-white shadow-surface transition-shadow hover:shadow-md">
       <div>
-        <Link
-          to={`/product/${id}`}
-          className="relative block aspect-square border-b border-line bg-[#FAFAFA] overflow-hidden group"
-        >
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={name}
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-[10px] font-bold uppercase tracking-[0.1em] text-subtle">
-              No image
-            </div>
-          )}
-          {renderBadge()}
-        </Link>
+        <div className="relative block aspect-square border-b border-line bg-[#FAFAFA] overflow-hidden group">
+          <Link
+            to={`/product/${id}`}
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="block h-full w-full"
+          >
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={name}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                loading="lazy"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-[10px] font-bold uppercase tracking-[0.1em] text-subtle">
+                No image
+              </div>
+            )}
+            {renderBadge()}
+          </Link>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleWishlist(item, navigate);
+            }}
+            aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+            title={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+            className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-white/95 hover:bg-white border border-line text-ink flex items-center justify-center shadow-xs transition-transform duration-150 hover:scale-110 active:scale-95 cursor-pointer"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill={inWishlist ? 'currentColor' : 'none'}
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={inWishlist ? 'text-ink' : 'text-neutral-600'}
+            >
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+          </button>
+        </div>
 
         <div className="flex flex-col gap-1.5 p-4">
-          <p className="text-[10px] font-bold uppercase leading-3 tracking-[0.1em] text-muted">
-            {label}
-          </p>
-          <Link to={`/product/${id}`}>
+          <div className="flex items-center justify-between gap-1">
+            <p className="text-[10px] font-bold uppercase leading-3 tracking-[0.1em] text-muted truncate">
+              {label}
+            </p>
+            {brand && (
+              <span className="text-[9px] font-black uppercase tracking-wider text-neutral-600 bg-neutral-100 px-1.5 py-0.5 border border-line shrink-0">
+                {brand}
+              </span>
+            )}
+          </div>
+          <Link
+            to={`/product/${id}`}
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          >
             <h3 className="text-base font-bold leading-snug tracking-[-0.02em] text-ink line-clamp-1 hover:underline">
               {name}
             </h3>
           </Link>
-
-          {/* Rating */}
-          <div className="flex items-center gap-1.5 text-xs text-ink">
-            <span className="tracking-[0.15em] text-[11px]">★★★★★</span>
-            {reviews != null && (
-              <span className="text-[11px] text-muted">({reviews})</span>
-            )}
-          </div>
 
           <div className="flex items-baseline justify-between pt-0.5">
             <p className="text-base font-bold leading-6 tracking-[-0.01em] text-ink">
@@ -165,7 +196,6 @@ export function ProductCardSkeleton() {
         <div className="flex flex-col gap-2.5 p-4">
           <div className="h-2.5 w-20 bg-line/60 rounded-xs" />
           <div className="h-4 w-3/4 bg-line/80 rounded-xs" />
-          <div className="h-3 w-16 bg-line/50 rounded-xs" />
           <div className="flex items-baseline justify-between pt-1">
             <div className="h-4 w-14 bg-line/70 rounded-xs" />
             <div className="h-2.5 w-12 bg-line/40 rounded-xs" />

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
+import { WishlistProvider } from './context/WishlistContext';
 import Navbar from './components/customer/Navbar';
 import Footer from './components/customer/Footer';
 import CartDrawer from './components/customer/CartDrawer';
@@ -26,10 +27,12 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/admin/*" element={<AdminApp />} />
-          <Route path="/*" element={<CustomerLayout />} />
-        </Routes>
+        <WishlistProvider>
+          <Routes>
+            <Route path="/admin/*" element={<AdminApp />} />
+            <Route path="/*" element={<CustomerLayout />} />
+          </Routes>
+        </WishlistProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -3,6 +3,7 @@ import UsersPage from './pages/UsersPage';
 import OrdersPage from './pages/OrdersPage';
 import ProductsPage from './pages/ProductsPage';
 import CategoriesPage from './pages/CategoriesPage';
+import BrandsPage from './pages/BrandsPage';
 import SuppliersPage from './pages/SuppliersPage';
 import PurchaseOrdersPage from './pages/PurchaseOrdersPage';
 import WholesaleBuyersPage from './pages/WholesaleBuyersPage';
@@ -17,6 +18,7 @@ const adminRoutes = [
   { path: 'orders', element: <OrdersPage /> },
   { path: 'products', element: <ProductsPage /> },
   { path: 'categories', element: <CategoriesPage /> },
+  { path: 'brands', element: <BrandsPage /> },
   { path: 'suppliers', element: <SuppliersPage /> },
   { path: 'purchase-orders', element: <PurchaseOrdersPage /> },
   { path: 'wholesale-buyers', element: <WholesaleBuyersPage /> },

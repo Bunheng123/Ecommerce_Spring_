@@ -27,6 +27,10 @@ public class Product {
     @Size(min = 2, max = 100)
     private String name;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "brand_id")
+    private Brand brand;
+
     private String description;
 
     private double price;

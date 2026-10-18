@@ -41,4 +41,18 @@ public interface ProductService {
     void deleteProductImage(Long productId, Long imageId);
 
     List<ProductImageResponseDto> getProductImages(Long productId);
+
+    List<String> getAllBrands();
+
+    com.setec.stock_inventory.dto.Response.PageResponseDto<ProductResponseDto> getCatalogProducts(
+            String search,
+            Long categoryId,
+            Long brandId,
+            String brand,
+            Double minPrice,
+            Double maxPrice,
+            String sort,
+            int page,
+            int size
+    );
 }

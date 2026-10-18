@@ -5,6 +5,7 @@ import com.setec.stock_inventory.dto.Request.ProductRequestDto;
 import com.setec.stock_inventory.dto.Request.StockAdjustmentRequestDto;
 import com.setec.stock_inventory.dto.Response.ProductImageResponseDto;
 import com.setec.stock_inventory.dto.Response.ProductResponseDto;
+import com.setec.stock_inventory.entity.Brand;
 import com.setec.stock_inventory.entity.Category;
 import com.setec.stock_inventory.entity.Product;
 import com.setec.stock_inventory.entity.ProductImage;
@@ -27,6 +28,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import com.setec.stock_inventory.dto.Response.PageResponseDto;
+import com.setec.stock_inventory.specification.ProductSpecification;
 
 import java.util.List;
 import java.util.Map;
@@ -38,6 +46,7 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final com.setec.stock_inventory.repo.BrandRepository brandRepository;
     private final CloudinaryService cloudinaryService;
     private final StockMovementRepository stockMovementRepository;
     private final UserRepository userRepository;
@@ -60,8 +69,16 @@ public class ProductServiceImpl implements ProductService {
             publicId = (String) image.get("public_id");
         }
 
+        Brand brand = null;
+        if (request.getBrandId() != null) {
+            brand = brandRepository.findById(request.getBrandId()).orElseThrow(
+                    () -> new ResourceNotFoundException("Brand not found with id " + request.getBrandId())
+            );
+        }
+
         Product product = ProductMapper.toEntity(request);
         product.setCategory(category);
+        product.setBrand(brand);
         product.setImageUrl(imageUrl);
         product.setPublicId(publicId);
 
@@ -114,7 +131,15 @@ public class ProductServiceImpl implements ProductService {
                 () -> new ResourceNotFoundException("Category not found with id " + request.getCategoryId())
         );
 
+        Brand brand = null;
+        if (request.getBrandId() != null) {
+            brand = brandRepository.findById(request.getBrandId()).orElseThrow(
+                    () -> new ResourceNotFoundException("Brand not found with id " + request.getBrandId())
+            );
+        }
+
         product.setName(request.getName());
+        product.setBrand(brand);
         product.setDescription(request.getDescription());
         product.setPrice(request.getPrice());
         product.setCategory(category);
@@ -351,6 +376,47 @@ public class ProductServiceImpl implements ProductService {
         return productImageRepository.findByProductId(productId).stream()
                 .map(ProductMapper::toImageResponse)
                 .toList();
+    }
+
+    @Override
+    public List<String> getAllBrands() {
+        return productRepository.findDistinctBrands();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponseDto<ProductResponseDto> getCatalogProducts(
+            String search,
+            Long categoryId,
+            Long brandId,
+            String brand,
+            Double minPrice,
+            Double maxPrice,
+            String sort,
+            int page,
+            int size
+    ) {
+        Specification<Product> spec = ProductSpecification.filterCatalog(
+                search, categoryId, brandId, brand, minPrice, maxPrice
+        );
+
+        Sort sortObj;
+        if ("price_asc".equalsIgnoreCase(sort)) {
+            sortObj = Sort.by(Sort.Direction.ASC, "price");
+        } else if ("price_desc".equalsIgnoreCase(sort)) {
+            sortObj = Sort.by(Sort.Direction.DESC, "price");
+        } else if ("name_asc".equalsIgnoreCase(sort)) {
+            sortObj = Sort.by(Sort.Direction.ASC, "name");
+        } else {
+            // default "newest"
+            sortObj = Sort.by(Sort.Direction.DESC, "id");
+        }
+
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, size), sortObj);
+        Page<Product> productPage = productRepository.findAll(spec, pageable);
+
+        Page<ProductResponseDto> dtoPage = productPage.map(ProductMapper::toResponse);
+        return PageResponseDto.from(dtoPage);
     }
 
     private User getCurrentAuthenticatedUser() {

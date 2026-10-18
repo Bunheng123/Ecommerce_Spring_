@@ -85,18 +85,22 @@ public class SecurityConfig {
                         // Low stock and admin product catalog endpoints: ADMIN and STOCK only
                         .requestMatchers(HttpMethod.GET, "/api/products/low-stock").hasAnyRole("ADMIN", "STOCK")
                         .requestMatchers(HttpMethod.GET, "/api/products/admin").hasAnyRole("ADMIN", "STOCK")
-                        // Product & Category browsing: public to everyone including anonymous
+                        // Product, Category & Brand browsing: public to everyone including anonymous
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/categories",
                                 "/api/categories/**",
+                                "/api/brands",
+                                "/api/brands/**",
                                 "/api/products",
                                 "/api/products/**"
                         ).permitAll()
-                        // Product & Category management (create, update, delete, stock adjust/in/out, images): ADMIN and STOCK only
+                        // Product, Category & Brand management (create, update, delete, stock adjust/in/out, images): ADMIN and STOCK only
                         .requestMatchers(
                                 "/api/categories",
                                 "/api/categories/**",
+                                "/api/brands",
+                                "/api/brands/**",
                                 "/api/products",
                                 "/api/products/**"
                         ).hasAnyRole("ADMIN", "STOCK")
@@ -108,6 +112,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/stock-movements/**").hasAnyRole("ADMIN", "STOCK")
                         // Cart: USER only
                         .requestMatchers("/api/cart", "/api/cart/**").hasRole("USER")
+                        // Wishlist: any authenticated user
+                        .requestMatchers("/api/wishlist", "/api/wishlist/**").authenticated()
                         // Order payment status: ADMIN only
                         .requestMatchers(HttpMethod.PUT, "/api/orders/*/payment-status").hasRole("ADMIN")
                         // Order self-cancellation: USER only

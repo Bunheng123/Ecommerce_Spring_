@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
-import Swal from 'sweetalert2';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import ProductForm from '../components/ProductForm';
 import StatusBadge from '../components/StatusBadge';
 import { AlertDialog, ConfirmDialog, Toast } from '../utils/swalConfig';
@@ -17,6 +16,7 @@ import {
   hardDeleteProduct,
   updateProduct,
 } from '../../api/products';
+import { fetchBrands } from '../../api/brands';
 import { getApiErrorMessage } from '../../api/stockMovements';
 
 const PAGE_SIZE = 10;
@@ -24,10 +24,12 @@ const PAGE_SIZE = 10;
 export default function ProductsPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [galleryImages, setGalleryImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [brandFilter, setBrandFilter] = useState('ALL');
   const [stockFilter, setStockFilter] = useState('ALL');
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState(null);
@@ -35,34 +37,51 @@ export default function ProductsPage() {
   const [galleryBusy, setGalleryBusy] = useState(false);
   const [galleryLoading, setGalleryLoading] = useState(false);
 
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     setLoading(true);
     try {
-      const [productData, categoryData] = await Promise.all([
+      const [productData, categoryData, brandData] = await Promise.all([
         stockFilter === 'LOW' ? fetchLowStockProducts() : fetchAdminProducts(),
         fetchCategories(),
+        fetchBrands().catch(() => []),
       ]);
       setProducts(productData);
       setCategories(categoryData);
+      setBrands(brandData);
     } catch (error) {
       await AlertDialog.fire({ title: 'Load Failed', text: getApiErrorMessage(error, 'Unable to load products') });
     } finally {
       setLoading(false);
     }
-  };
+  }, [stockFilter]);
 
   useEffect(() => {
     loadProducts();
-  }, [stockFilter]);
+  }, [loadProducts]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return products.filter((product) => {
-      const matchesSearch = !query || `${product.name || ''} ${product.categoryName || ''} ${product.id}`.toLowerCase().includes(query);
+      const brandStr = product.brandName || product.brand || '';
+      const matchesSearch = !query || `${product.name || ''} ${brandStr} ${product.categoryName || ''} ${product.id}`.toLowerCase().includes(query);
       const matchesCategory = categoryFilter === 'ALL' || String(product.categoryId) === String(categoryFilter);
-      return matchesSearch && matchesCategory;
+
+      let matchesBrand = true;
+      if (brandFilter === 'UNBRANDED') {
+        matchesBrand = !product.brandId && !product.brandName && !product.brand;
+      } else if (brandFilter !== 'ALL') {
+        const selectedBrandObj = brands.find((b) => String(b.id) === String(brandFilter));
+        const selectedName = selectedBrandObj ? selectedBrandObj.name.toLowerCase() : String(brandFilter).toLowerCase();
+        const pBrandName = (product.brandName || product.brand || '').toLowerCase();
+
+        matchesBrand =
+          String(product.brandId) === String(brandFilter) ||
+          (pBrandName && pBrandName === selectedName);
+      }
+
+      return matchesSearch && matchesCategory && matchesBrand;
     });
-  }, [products, search, categoryFilter]);
+  }, [products, search, categoryFilter, brandFilter, brands]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -233,14 +252,59 @@ export default function ProductsPage() {
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-black uppercase tracking-tight text-neutral-900">Product Catalog</h2>
             <span className="text-xs font-black bg-neutral-100 text-neutral-700 px-3 py-1 rounded-full border border-neutral-200">{filtered.length} Items</span>
+            {(search || categoryFilter !== 'ALL' || brandFilter !== 'ALL' || stockFilter !== 'ALL') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setCategoryFilter('ALL');
+                  setBrandFilter('ALL');
+                  setStockFilter('ALL');
+                  resetPaging();
+                }}
+                className="text-[11px] font-bold text-neutral-500 hover:text-neutral-900 underline cursor-pointer"
+              >
+                Reset Filters
+              </button>
+            )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full xl:w-auto">
-            <input value={search} onChange={(event) => { setSearch(event.target.value); resetPaging(); }} placeholder="Search products..." className="h-10 min-w-64 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-3 outline-none focus:border-neutral-900 focus:bg-white" />
-            <select value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); resetPaging(); }} className="h-10 min-w-52 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-3 outline-none focus:border-neutral-900 focus:bg-white">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 w-full xl:w-auto">
+            <input
+              value={search}
+              onChange={(event) => { setSearch(event.target.value); resetPaging(); }}
+              placeholder="Search products..."
+              className="h-10 min-w-56 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-3 outline-none focus:border-neutral-900 focus:bg-white"
+            />
+            <select
+              value={categoryFilter}
+              onChange={(event) => { setCategoryFilter(event.target.value); resetPaging(); }}
+              className="h-10 min-w-44 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-3 outline-none focus:border-neutral-900 focus:bg-white cursor-pointer"
+            >
               <option value="ALL">All Categories</option>
-              {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
             </select>
-            <select value={stockFilter} onChange={(event) => { setStockFilter(event.target.value); resetPaging(); }} className="h-10 min-w-44 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-3 outline-none focus:border-neutral-900 focus:bg-white">
+            <select
+              value={brandFilter}
+              onChange={(event) => { setBrandFilter(event.target.value); resetPaging(); }}
+              className="h-10 min-w-44 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-3 outline-none focus:border-neutral-900 focus:bg-white cursor-pointer"
+            >
+              <option value="ALL">All Brands</option>
+              <option value="UNBRANDED">No Brand / Unbranded</option>
+              {brands.map((brand) => (
+                <option key={brand.id} value={brand.id}>
+                  {brand.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={stockFilter}
+              onChange={(event) => { setStockFilter(event.target.value); resetPaging(); }}
+              className="h-10 min-w-36 bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-3 outline-none focus:border-neutral-900 focus:bg-white cursor-pointer"
+            >
               <option value="ALL">All Stock</option>
               <option value="LOW">Low Stock</option>
             </select>
@@ -307,7 +371,14 @@ export default function ProductsPage() {
                     </td>
                     <td className="py-4 px-4 whitespace-nowrap">
                       <span className="font-black text-sm text-neutral-900 block">{product.name}</span>
-                      <span className="text-[10px] font-mono text-neutral-400">ID #{product.id}</span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {(product.brandName || product.brand) && (
+                          <span className="text-[10px] font-black uppercase tracking-wider text-neutral-600 bg-neutral-100 px-1.5 py-0.5 rounded-sm">
+                            {product.brandName || product.brand}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-mono text-neutral-400">ID #{product.id}</span>
+                      </div>
                     </td>
                     <td className="py-4 px-4 font-bold text-neutral-700 whitespace-nowrap">{product.categoryName || 'General'}</td>
                     <td className="py-4 px-4 font-black text-neutral-900 whitespace-nowrap">${Number(product.price || 0).toFixed(2)}</td>
@@ -364,6 +435,7 @@ export default function ProductsPage() {
             mode={modal.mode}
             initialData={modal.item}
             categories={categories}
+            brands={brands}
             galleryImages={galleryImages}
             onSubmit={handleSubmit}
             onCancel={closeModal}

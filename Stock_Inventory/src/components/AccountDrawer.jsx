@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useWishlist } from '../context/WishlistContext';
 import { getCurrentUser, updateProfile, uploadProfilePicture } from '../api/auth';
 
 export default function AccountDrawer({ isOpen, onClose }) {
   const navigate = useNavigate();
   const { user, token, updateUser, logout } = useAuth();
+  const { wishlistCount } = useWishlist();
   const drawerRef = useRef(null);
   const closeButtonRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -474,6 +476,22 @@ export default function AccountDrawer({ isOpen, onClose }) {
               className="flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink hover:bg-neutral-100 rounded-lg transition-colors"
             >
               <span>My Profile</span>
+              <span className="text-muted text-sm">&rarr;</span>
+            </Link>
+
+            <Link
+              to="/wishlist"
+              onClick={onClose}
+              className="flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink hover:bg-neutral-100 rounded-lg transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <span>My Wishlist</span>
+                {wishlistCount > 0 && (
+                  <span className="border border-ink bg-white px-1.5 py-0.2 text-[10px] font-bold text-ink">
+                    {wishlistCount}
+                  </span>
+                )}
+              </div>
               <span className="text-muted text-sm">&rarr;</span>
             </Link>
 

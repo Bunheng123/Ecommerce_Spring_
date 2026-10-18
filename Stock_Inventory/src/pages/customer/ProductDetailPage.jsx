@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { fetchProductById, fetchProducts, fetchProductImages } from "../../api/products";
-import { SAMPLE_PRODUCTS } from "../../data/previewProducts";
 import ProductCard from "../../components/customer/ProductCard";
 import { useCart } from "../../context/CartContext";
+import { useWishlist } from "../../context/WishlistContext";
 
 function normalizeImageUrl(url) {
   if (!url) return null;
@@ -16,6 +16,7 @@ function normalizeImageUrl(url) {
 export default function ProductDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isInWishlist, toggleWishlist } = useWishlist();
 
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -28,10 +29,12 @@ export default function ProductDetailPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const { addItem } = useCart();
+  const inWishlist = isInWishlist(product?.id);
+
   useEffect(() => {
     let isMounted = true;
-    setLoading(true);
-    setQuantity(1);
+    window.scrollTo({ top: 0, behavior: 'instant' });
 
     Promise.all([
       fetchProductById(id),
@@ -39,9 +42,17 @@ export default function ProductDetailPage() {
         console.warn("fetchProductImages optional fetch error:", err);
         return [];
       }),
+      fetchProducts().catch((err) => {
+        console.warn("fetchProducts optional fetch error:", err);
+        return [];
+      }),
     ])
-      .then(([data, extraImages]) => {
+      .then(([data, extraImages, catalog]) => {
         if (isMounted) {
+          setQuantity(1);
+          if (Array.isArray(catalog) && catalog.length > 0) {
+            setAllProducts(catalog);
+          }
           if (data && data.id) {
             setProduct(data);
             const primary = normalizeImageUrl(data.imageUrl);
@@ -66,6 +77,7 @@ export default function ProductDetailPage() {
             setAllLoadedImages([]);
             setSelectedImage(null);
           }
+          setLoading(false);
         }
       })
       .catch((err) => {
@@ -74,10 +86,8 @@ export default function ProductDetailPage() {
           setProduct(null);
           setAllLoadedImages([]);
           setSelectedImage(null);
+          setLoading(false);
         }
-      })
-      .finally(() => {
-        if (isMounted) setLoading(false);
       });
 
     return () => {
@@ -85,18 +95,77 @@ export default function ProductDetailPage() {
     };
   }, [id]);
 
-  useEffect(() => {
-    fetchProducts().then((data) => {
-      if (Array.isArray(data) && data.length > 0) {
-        setAllProducts(data);
-      }
-    });
-  }, []);
+  // Derived properties from Spring Boot ProductResponseDto
+  const {
+    id: prodId = id,
+    name = "Artifact",
+    brand,
+    description = "",
+    price = 0,
+    imageUrl,
+    publicId,
+    stock = 0,
+    active = true,
+    costPrice,
+    reorderLevel = 0,
+    categoryId,
+    categoryName = "GENERAL",
+    galleryImageUrls = [],
+  } = product || {};
 
-  const { addItem } = useCart();
+  // Consolidate all normalized images (primary + gallery + api images)
+  const primaryImg = normalizeImageUrl(imageUrl);
+  const galleryImgs = (Array.isArray(galleryImageUrls) ? galleryImageUrls : [])
+    .map(normalizeImageUrl)
+    .filter(Boolean);
+  const allImages = allLoadedImages.length > 0
+    ? allLoadedImages
+    : Array.from(new Set([primaryImg, ...galleryImgs].filter(Boolean)));
+
+  const currentImageIndex = Math.max(0, allImages.indexOf(selectedImage));
+
+  // Dynamic Related Products ("You may also like")
+  // 1. Same category active products, strictly excluding currently viewed product
+  // 2. Fallback: up to 4 other in-stock products from catalog (excluding current product)
+  // 3. Cleanly hide section if 0 matches
+  const relatedProducts = useMemo(() => {
+    if (!product || !allProducts.length) return [];
+
+    const currentId = Number(prodId || id);
+    const currentCatId = categoryId != null ? Number(categoryId) : null;
+    const currentCatName = categoryName ? String(categoryName).toLowerCase().trim() : '';
+
+    const sameCategory = allProducts.filter((p) => {
+      if (Number(p.id) === currentId) return false;
+      if (p.active === false) return false;
+
+      const pCatId = p.categoryId != null ? Number(p.categoryId) : null;
+      const pCatName = p.categoryName ? String(p.categoryName).toLowerCase().trim() : '';
+
+      const matchCatId = currentCatId !== null && pCatId !== null && currentCatId === pCatId;
+      const matchCatName = currentCatName && pCatName && currentCatName === pCatName;
+
+      return matchCatId || matchCatName;
+    });
+
+    if (sameCategory.length > 0) {
+      return sameCategory.slice(0, 4);
+    }
+
+    // Fallback: up to 4 other in-stock active products from catalog
+    const fallbackInStock = allProducts.filter((p) => {
+      if (Number(p.id) === currentId) return false;
+      if (p.active === false) return false;
+      return Number(p.stock) > 0;
+    });
+
+    return fallbackInStock.slice(0, 4);
+  }, [product, prodId, id, categoryId, categoryName, allProducts]);
+
+  const isLoading = loading || (product && String(product.id) !== String(id));
 
   // Loading skeleton state
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="bg-surface min-h-screen py-10">
         <div className="mx-auto max-w-[1280px] px-6 md:px-12 animate-pulse">
@@ -151,36 +220,6 @@ export default function ProductDetailPage() {
     );
   }
 
-  // Derived properties from Spring Boot ProductResponseDto
-  const {
-    id: prodId = id,
-    name = "Artifact",
-    description = "",
-    price = 0,
-    imageUrl,
-    publicId,
-    stock = 0,
-    active = true,
-    costPrice,
-    reorderLevel = 0,
-    categoryId,
-    categoryName = "GENERAL",
-    galleryImageUrls = [],
-    rating = 5,
-    reviews = 50,
-  } = product;
-
-  // Consolidate all normalized images (primary + gallery + api images)
-  const primaryImg = normalizeImageUrl(imageUrl);
-  const galleryImgs = (Array.isArray(galleryImageUrls) ? galleryImageUrls : [])
-    .map(normalizeImageUrl)
-    .filter(Boolean);
-  const allImages = allLoadedImages.length > 0
-    ? allLoadedImages
-    : Array.from(new Set([primaryImg, ...galleryImgs].filter(Boolean)));
-
-  const currentImageIndex = Math.max(0, allImages.indexOf(selectedImage));
-
   const handlePrevImage = () => {
     if (allImages.length <= 1) return;
     const prevIdx = (currentImageIndex - 1 + allImages.length) % allImages.length;
@@ -209,11 +248,6 @@ export default function ProductDetailPage() {
       setIsAdding(false);
     }
   };
-
-  // Related products from backend catalog (excluding current item)
-  const relatedProducts = allProducts
-    .filter((p) => Number(p.id) !== Number(prodId))
-    .slice(0, 4);
 
   return (
     <div className="bg-surface min-h-screen py-10">
@@ -334,9 +368,16 @@ export default function ProductDetailPage() {
             <div className="flex flex-col gap-4">
               {/* Category & Identifier */}
               <div className="flex items-center justify-between border-b border-line pb-3">
-                <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted">
-                  {categoryName} • ID #{String(prodId).padStart(4, "0")}
-                </span>
+                <div className="flex items-center gap-2">
+                  {brand && (
+                    <span className="border border-line bg-surface px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-ink">
+                      {brand}
+                    </span>
+                  )}
+                  <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted">
+                    {categoryName} • ID #{String(prodId).padStart(4, "0")}
+                  </span>
+                </div>
                 <span className="text-[10px] font-mono uppercase tracking-wider text-subtle">
                   {publicId || `SKU-PRD-${prodId}`}
                 </span>
@@ -347,12 +388,7 @@ export default function ProductDetailPage() {
                 {name}
               </h1>
 
-              {/* Rating & Reviews */}
-              <div className="flex items-center gap-2 text-xs text-ink">
-                <span className="tracking-[0.15em] text-sm">★★★★★</span>
-                <span className="font-bold">{rating.toFixed(1)}</span>
-                <span className="text-muted">({reviews} customer reviews)</span>
-              </div>
+
 
               {/* Price */}
               <div className="py-2 border-y border-line">
@@ -430,12 +466,12 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 flex items-center gap-2">
                   <button
                     type="button"
                     disabled={isSoldOut || isAdding}
                     onClick={handleAddToCart}
-                    className="w-full h-12 border border-ink bg-ink text-xs font-bold uppercase tracking-[0.12em] text-white hover:bg-neutral-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
+                    className="flex-1 h-12 border border-ink bg-ink text-xs font-bold uppercase tracking-[0.12em] text-white hover:bg-neutral-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
                   >
                     {isAdding ? (
                       <>
@@ -450,6 +486,29 @@ export default function ProductDetailPage() {
                         <span>Add to Cart</span>
                       </>
                     )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleWishlist(product, navigate)}
+                    aria-label={inWishlist ? "Remove from wishlist" : "Add to wishlist"}
+                    title={inWishlist ? "In Wishlist (click to remove)" : "Save to Wishlist"}
+                    className={`w-12 h-12 border border-ink flex items-center justify-center transition-colors cursor-pointer shadow-sm active:scale-[0.99] shrink-0 ${
+                      inWishlist ? "bg-ink text-white" : "bg-white text-ink hover:bg-neutral-100"
+                    }`}
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill={inWishlist ? "currentColor" : "none"}
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
                   </button>
                 </div>
 
@@ -550,6 +609,10 @@ export default function ProductDetailPage() {
                     <span className="font-bold text-ink">{name}</span>
                   </div>
                   <div className="border border-line p-3 bg-surface">
+                    <span className="text-muted block text-[10px]">brand: String</span>
+                    <span className="font-bold text-ink">{brand || "null"}</span>
+                  </div>
+                  <div className="border border-line p-3 bg-surface">
                     <span className="text-muted block text-[10px]">price: Double</span>
                     <span className="font-bold text-ink">
                       ${Number(price).toFixed(2)}
@@ -612,16 +675,16 @@ export default function ProductDetailPage() {
           </div>
         </section>
 
-        {/* Recommended Products Grid */}
+        {/* Dynamic Related Products ("You may also like") */}
         {relatedProducts.length > 0 && (
           <section className="mt-16">
             <div className="flex items-end justify-between border-b border-line pb-3 mb-6">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted">
+                <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted block mb-1">
                   Complementary Pieces
                 </span>
                 <h2 className="text-2xl font-bold uppercase tracking-tight text-ink">
-                  Related Artifacts
+                  You May Also Like
                 </h2>
               </div>
               <Link
