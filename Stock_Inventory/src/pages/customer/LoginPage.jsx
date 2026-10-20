@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { login as loginApi, getCurrentUser } from '../../api/auth';
+import { AlertDialog } from '../../admin/utils/swalConfig';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -59,8 +60,17 @@ export default function LoginPage() {
       navigate(role === 'ADMIN' ? '/admin' : '/');
     } catch (err) {
       console.error('Login failed:', err);
-      // Standard practice: do not reveal whether email or password was incorrect
-      setErrorMessage('Invalid username or password');
+      const backendMessage = err.response?.data?.message || err.message;
+      if (backendMessage && typeof backendMessage === 'string' && backendMessage.toLowerCase().includes('deactivated')) {
+        const cleanMessage = backendMessage.replace(/^Error\s*:\s*/i, '');
+        setErrorMessage(cleanMessage);
+        AlertDialog.fire({
+          title: 'Account Suspended',
+          text: cleanMessage,
+        });
+      } else {
+        setErrorMessage('Invalid username or password');
+      }
     } finally {
       setIsSubmitting(false);
     }

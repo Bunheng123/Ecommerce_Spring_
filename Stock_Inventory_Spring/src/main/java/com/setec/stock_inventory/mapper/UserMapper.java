@@ -22,6 +22,7 @@ public class UserMapper {
                 .profileImageUrl(user.getProfileImageUrl())
                 .profilePublicId(user.getProfilePublicId())
                 .phone(user.getPhone())
+                .active(user.isActive())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();
@@ -48,6 +49,7 @@ public class UserMapper {
                 .password(request.getPassword())
                 .role(role)
                 .phone(request.getPhone() != null ? request.getPhone().trim() : null)
+                .active(request.getActive() != null ? request.getActive() : true)
                 .build();
     }
 }

@@ -8,6 +8,8 @@ import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 public class ProductSpecification {
@@ -18,7 +20,8 @@ public class ProductSpecification {
             Long brandId,
             String brand,
             Double minPrice,
-            Double maxPrice
+            Double maxPrice,
+            Collection<Long> pendingProductIds
     ) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -32,6 +35,15 @@ public class ProductSpecification {
 
             // Always only active products for the storefront catalog
             predicates.add(cb.isTrue(root.get("active")));
+
+            // Storefront catalog visibility:
+            // product.stock > 0 OR product is in a PENDING Purchase Order (pendingProductIds)
+            Predicate inStock = cb.greaterThan(root.get("stock"), 0);
+            if (pendingProductIds != null && !pendingProductIds.isEmpty()) {
+                predicates.add(cb.or(inStock, root.get("id").in(pendingProductIds)));
+            } else {
+                predicates.add(inStock);
+            }
 
             Join<Product, Brand> brandJoin = root.join("brand", JoinType.LEFT);
 
@@ -71,10 +83,21 @@ public class ProductSpecification {
     public static Specification<Product> filterCatalog(
             String search,
             Long categoryId,
+            Long brandId,
             String brand,
             Double minPrice,
             Double maxPrice
     ) {
-        return filterCatalog(search, categoryId, null, brand, minPrice, maxPrice);
+        return filterCatalog(search, categoryId, brandId, brand, minPrice, maxPrice, Collections.emptySet());
+    }
+
+    public static Specification<Product> filterCatalog(
+            String search,
+            Long categoryId,
+            String brand,
+            Double minPrice,
+            Double maxPrice
+    ) {
+        return filterCatalog(search, categoryId, null, brand, minPrice, maxPrice, Collections.emptySet());
     }
 }

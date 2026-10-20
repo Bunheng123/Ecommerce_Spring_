@@ -20,8 +20,11 @@ import com.setec.stock_inventory.repo.ProductImageRepository;
 import com.setec.stock_inventory.repo.ProductRepository;
 import com.setec.stock_inventory.repo.StockMovementRepository;
 import com.setec.stock_inventory.repo.UserRepository;
+import com.setec.stock_inventory.dto.email.StockAlertEmailPayload;
+import com.setec.stock_inventory.service.EmailService;
 import com.setec.stock_inventory.service.ProductService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -40,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
@@ -53,6 +57,25 @@ public class ProductServiceImpl implements ProductService {
     private final ProductImageRepository productImageRepository;
     private final com.setec.stock_inventory.repo.CartItemRepository cartItemRepository;
     private final com.setec.stock_inventory.repo.OrderItemRepository orderItemRepository;
+    private final com.setec.stock_inventory.repo.PurchaseOrderRepository purchaseOrderRepository;
+    private final EmailService emailService;
+
+    private ProductResponseDto mapToResponseWithComingSoon(Product product, java.util.Set<Long> pendingProductIds) {
+        ProductResponseDto dto = ProductMapper.toResponse(product);
+        if (dto != null) {
+            boolean comingSoon = dto.getStock() <= 0 && pendingProductIds != null && pendingProductIds.contains(dto.getId());
+            dto.setComingSoon(comingSoon);
+        }
+        return dto;
+    }
+
+    private ProductResponseDto enrichComingSoon(ProductResponseDto dto) {
+        if (dto != null) {
+            boolean comingSoon = dto.getStock() <= 0 && purchaseOrderRepository.isProductInPendingPurchaseOrder(dto.getId());
+            dto.setComingSoon(comingSoon);
+        }
+        return dto;
+    }
 
     @Override
     public ProductResponseDto createProduct(ProductRequestDto request) {
@@ -83,20 +106,22 @@ public class ProductServiceImpl implements ProductService {
         product.setPublicId(publicId);
 
         Product saved = productRepository.save(product);
-        return ProductMapper.toResponse(saved);
+        return enrichComingSoon(ProductMapper.toResponse(saved));
     }
 
     @Override
     public List<ProductResponseDto> getAllProducts() {
+        java.util.Set<Long> pendingProductIds = purchaseOrderRepository.findProductIdsInPendingPurchaseOrders();
         return productRepository.findAllWithDetails().stream()
-                .map(ProductMapper::toResponse)
+                .map(p -> mapToResponseWithComingSoon(p, pendingProductIds))
                 .toList();
     }
 
     @Override
     public List<ProductResponseDto> getAllProductsForAdmin() {
+        java.util.Set<Long> pendingProductIds = purchaseOrderRepository.findProductIdsInPendingPurchaseOrders();
         return productRepository.findAllIncludingInactiveWithDetails().stream()
-                .map(ProductMapper::toResponse)
+                .map(p -> mapToResponseWithComingSoon(p, pendingProductIds))
                 .toList();
     }
 
@@ -105,7 +130,7 @@ public class ProductServiceImpl implements ProductService {
         Product product = productRepository.findById(id).orElseThrow(
                 () -> new ResourceNotFoundException("Product not found with id " + id)
         );
-        ProductResponseDto response = ProductMapper.toResponse(product);
+        ProductResponseDto response = enrichComingSoon(ProductMapper.toResponse(product));
         List<ProductImage> galleryImages = productImageRepository.findByProductId(id);
         response.setGalleryImageUrls(galleryImages.stream().map(ProductImage::getImageUrl).toList());
         return response;
@@ -116,8 +141,9 @@ public class ProductServiceImpl implements ProductService {
         if (!categoryRepository.existsById(categoryId)) {
             throw new ResourceNotFoundException("Category not found with id " + categoryId);
         }
+        java.util.Set<Long> pendingProductIds = purchaseOrderRepository.findProductIdsInPendingPurchaseOrders();
         return productRepository.findByCategoryIdAndActiveTrue(categoryId).stream()
-                .map(ProductMapper::toResponse)
+                .map(p -> mapToResponseWithComingSoon(p, pendingProductIds))
                 .toList();
     }
 
@@ -161,7 +187,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Product updated = productRepository.save(product);
-        return ProductMapper.toResponse(updated);
+        return enrichComingSoon(ProductMapper.toResponse(updated));
     }
 
     @Override
@@ -202,8 +228,9 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<ProductResponseDto> getLowStockProducts() {
+        java.util.Set<Long> pendingProductIds = purchaseOrderRepository.findProductIdsInPendingPurchaseOrders();
         return productRepository.findLowStockProducts().stream()
-                .map(ProductMapper::toResponse)
+                .map(p -> mapToResponseWithComingSoon(p, pendingProductIds))
                 .toList();
     }
 
@@ -250,7 +277,27 @@ public class ProductServiceImpl implements ProductService {
 
         stockMovementRepository.save(movement);
 
-        return ProductMapper.toResponse(updated);
+        if (request.getQuantity() < 0 && newStock <= updated.getReorderLevel()) {
+            String brandName = updated.getBrand() != null ? updated.getBrand().getName() : "N/A";
+            String categoryName = updated.getCategory() != null ? updated.getCategory().getName() : "N/A";
+            StockAlertEmailPayload alertPayload = StockAlertEmailPayload.builder()
+                    .productId(updated.getId())
+                    .productName(updated.getName())
+                    .brandName(brandName)
+                    .categoryName(categoryName)
+                    .previousStock(previousStock)
+                    .currentStock(newStock)
+                    .reorderLevel(updated.getReorderLevel())
+                    .triggerSource("Manual Stock Adjustment")
+                    .build();
+            try {
+                emailService.sendAdminStockAlertEmail(alertPayload);
+            } catch (Exception e) {
+                log.error("Failed to trigger admin stock alert for Product #{}: {}", updated.getId(), e.getMessage());
+            }
+        }
+
+        return enrichComingSoon(ProductMapper.toResponse(updated));
     }
 
     @Override
@@ -284,7 +331,7 @@ public class ProductServiceImpl implements ProductService {
 
         stockMovementRepository.save(movement);
 
-        return ProductMapper.toResponse(updated);
+        return enrichComingSoon(ProductMapper.toResponse(updated));
     }
 
     @Override
@@ -322,7 +369,27 @@ public class ProductServiceImpl implements ProductService {
 
         stockMovementRepository.save(movement);
 
-        return ProductMapper.toResponse(updated);
+        if (newStock <= updated.getReorderLevel()) {
+            String brandName = updated.getBrand() != null ? updated.getBrand().getName() : "N/A";
+            String categoryName = updated.getCategory() != null ? updated.getCategory().getName() : "N/A";
+            StockAlertEmailPayload alertPayload = StockAlertEmailPayload.builder()
+                    .productId(updated.getId())
+                    .productName(updated.getName())
+                    .brandName(brandName)
+                    .categoryName(categoryName)
+                    .previousStock(previousStock)
+                    .currentStock(newStock)
+                    .reorderLevel(updated.getReorderLevel())
+                    .triggerSource("Manual Stock Adjustment (Stock-Out)")
+                    .build();
+            try {
+                emailService.sendAdminStockAlertEmail(alertPayload);
+            } catch (Exception e) {
+                log.error("Failed to trigger admin stock alert for Product #{}: {}", updated.getId(), e.getMessage());
+            }
+        }
+
+        return enrichComingSoon(ProductMapper.toResponse(updated));
     }
 
     @Override
@@ -396,8 +463,10 @@ public class ProductServiceImpl implements ProductService {
             int page,
             int size
     ) {
+        java.util.Set<Long> pendingProductIds = purchaseOrderRepository.findProductIdsInPendingPurchaseOrders();
+
         Specification<Product> spec = ProductSpecification.filterCatalog(
-                search, categoryId, brandId, brand, minPrice, maxPrice
+                search, categoryId, brandId, brand, minPrice, maxPrice, pendingProductIds
         );
 
         Sort sortObj;
@@ -415,7 +484,7 @@ public class ProductServiceImpl implements ProductService {
         Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, size), sortObj);
         Page<Product> productPage = productRepository.findAll(spec, pageable);
 
-        Page<ProductResponseDto> dtoPage = productPage.map(ProductMapper::toResponse);
+        Page<ProductResponseDto> dtoPage = productPage.map(p -> mapToResponseWithComingSoon(p, pendingProductIds));
         return PageResponseDto.from(dtoPage);
     }
 

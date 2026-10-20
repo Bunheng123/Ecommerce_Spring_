@@ -51,7 +51,12 @@ export default function ProductDetailPage() {
         if (isMounted) {
           setQuantity(1);
           if (Array.isArray(catalog) && catalog.length > 0) {
-            setAllProducts(catalog);
+            const customerCatalog = catalog.filter((p) => {
+              if (p.active === false) return false;
+              const s = Number(p.stock ?? 0);
+              return s > 0 || Boolean(p.comingSoon);
+            });
+            setAllProducts(customerCatalog);
           }
           if (data && data.id) {
             setProduct(data);
@@ -232,6 +237,8 @@ export default function ProductDetailPage() {
 
   const numStock = Number(stock || 0);
   const threshold = (reorderLevel != null && reorderLevel > 0) ? reorderLevel : 5;
+  const isComingSoon = (stock <= 0 || numStock <= 0) && Boolean(product?.comingSoon);
+  const isUnavailable = (stock <= 0 || numStock <= 0) && !isComingSoon;
   const isSoldOut = stock <= 0 || numStock <= 0;
   const isLowStock = !isSoldOut && (numStock <= threshold || numStock <= 5);
 
@@ -293,9 +300,13 @@ export default function ProductDetailPage() {
 
               {/* Status Badges */}
               <div className="absolute top-4 left-4 flex flex-col gap-1.5 z-10">
-                {isSoldOut ? (
+                {isComingSoon ? (
+                  <span className="border border-ink bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-ink shadow-2xs">
+                    COMING SOON
+                  </span>
+                ) : isUnavailable ? (
                   <span className="border border-line bg-chip px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
-                    Out of Stock
+                    Currently Unavailable
                   </span>
                 ) : isLowStock ? (
                   <span className="border border-ink bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-ink shadow-2xs">
@@ -388,7 +399,13 @@ export default function ProductDetailPage() {
                 {name}
               </h1>
 
-
+              {/* Unavailable Direct Visit Banner */}
+              {isUnavailable && (
+                <div className="p-3 border border-line bg-neutral-100 text-xs text-ink font-medium">
+                  <span className="font-bold uppercase tracking-wider block mb-0.5">Notice</span>
+                  This item is currently out of stock and unavailable for ordering.
+                </div>
+              )}
 
               {/* Price */}
               <div className="py-2 border-y border-line">
@@ -415,18 +432,22 @@ export default function ProductDetailPage() {
                 </span>
                 <span
                   className={`font-bold uppercase text-[11px] tracking-wider ${
-                    isSoldOut
-                      ? "text-neutral-500"
-                      : isLowStock
-                        ? "text-ink font-black"
-                        : "text-ink"
+                    isComingSoon
+                      ? "text-ink font-black"
+                      : isUnavailable
+                        ? "text-neutral-500 font-bold"
+                        : isLowStock
+                          ? "text-ink font-black"
+                          : "text-ink"
                   }`}
                 >
-                  {isSoldOut
-                    ? "Out of Stock"
-                    : isLowStock
-                      ? `Only ${stock} left in stock`
-                      : "In Stock"}
+                  {isComingSoon
+                    ? "COMING SOON • RESTOCK ON THE WAY"
+                    : isUnavailable
+                      ? "Currently Unavailable"
+                      : isLowStock
+                        ? `Only ${stock} left in stock`
+                        : "In Stock"}
                 </span>
               </div>
 
@@ -460,26 +481,44 @@ export default function ProductDetailPage() {
                 </div>
 
                 <div className="pt-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={isSoldOut || isAdding}
-                    onClick={handleAddToCart}
-                    className="flex-1 h-12 border border-ink bg-ink text-xs font-bold uppercase tracking-[0.12em] text-white hover:bg-neutral-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
-                  >
-                    {isAdding ? (
-                      <>
-                        <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        <span>Adding to Cart...</span>
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                        </svg>
-                        <span>Add to Cart</span>
-                      </>
-                    )}
-                  </button>
+                  {isComingSoon ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="flex-1 h-12 border border-line bg-chip text-[11px] font-bold uppercase tracking-[0.1em] text-muted cursor-not-allowed flex items-center justify-center px-4"
+                    >
+                      COMING SOON — AWAITING SUPPLIER DELIVERY
+                    </button>
+                  ) : isUnavailable ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="flex-1 h-12 border border-line bg-chip text-[11px] font-bold uppercase tracking-[0.12em] text-muted cursor-not-allowed flex items-center justify-center px-4"
+                    >
+                      Currently Unavailable
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isSoldOut || isAdding}
+                      onClick={handleAddToCart}
+                      className="flex-1 h-12 border border-ink bg-ink text-xs font-bold uppercase tracking-[0.12em] text-white hover:bg-neutral-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
+                    >
+                      {isAdding ? (
+                        <>
+                          <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span>Adding to Cart...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                          </svg>
+                          <span>Add to Cart</span>
+                        </>
+                      )}
+                    </button>
+                  )}
 
                   <button
                     type="button"

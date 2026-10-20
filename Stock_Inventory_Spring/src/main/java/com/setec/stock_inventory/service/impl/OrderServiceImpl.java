@@ -22,8 +22,13 @@ import com.setec.stock_inventory.repo.OrderItemRepository;
 import com.setec.stock_inventory.repo.OrderRepository;
 import com.setec.stock_inventory.repo.ProductRepository;
 import com.setec.stock_inventory.repo.StockMovementRepository;
+import com.setec.stock_inventory.dto.email.OrderEmailItemDto;
+import com.setec.stock_inventory.dto.email.OrderEmailPayload;
+import com.setec.stock_inventory.dto.email.StockAlertEmailPayload;
 import com.setec.stock_inventory.repo.UserRepository;
+import com.setec.stock_inventory.service.EmailService;
 import com.setec.stock_inventory.service.OrderService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,9 +41,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Service
 public class OrderServiceImpl implements OrderService {
 
@@ -48,6 +55,7 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final StockMovementRepository stockMovementRepository;
     private final CartRepository cartRepository;
+    private final EmailService emailService;
 
     @Autowired
     public OrderServiceImpl(
@@ -56,7 +64,8 @@ public class OrderServiceImpl implements OrderService {
             ProductRepository productRepository,
             UserRepository userRepository,
             StockMovementRepository stockMovementRepository,
-            CartRepository cartRepository
+            CartRepository cartRepository,
+            EmailService emailService
     ) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
@@ -64,6 +73,7 @@ public class OrderServiceImpl implements OrderService {
         this.userRepository = userRepository;
         this.stockMovementRepository = stockMovementRepository;
         this.cartRepository = cartRepository;
+        this.emailService = emailService;
     }
 
     @Override
@@ -186,9 +196,19 @@ public class OrderServiceImpl implements OrderService {
         LocalDateTime now = LocalDateTime.now();
         for (Order order : pendingOrders) {
             if (order.getOrderDate() != null && Duration.between(order.getOrderDate(), now).toHours() >= 48) {
-                order.setStatus("COMPLETED");
-                order.setPaymentStatus(PaymentStatus.PAID);
-                orderRepository.save(order);
+                Order fullOrder = orderRepository.findByIdWithDetails(order.getId()).orElse(order);
+                fullOrder.setStatus("COMPLETED");
+                fullOrder.setPaymentStatus(PaymentStatus.PAID);
+                Order saved = orderRepository.save(fullOrder);
+
+                try {
+                    OrderEmailPayload payload = buildOrderEmailPayload(saved);
+                    if (payload != null) {
+                        emailService.sendOrderCompletedEmail(payload);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to trigger auto-complete email for Order #{}: {}", saved.getId(), e.getMessage());
+                }
             }
         }
     }
@@ -199,7 +219,16 @@ public class OrderServiceImpl implements OrderService {
             if (hoursElapsed >= 48) {
                 order.setStatus("COMPLETED");
                 order.setPaymentStatus(PaymentStatus.PAID);
-                orderRepository.save(order);
+                Order saved = orderRepository.save(order);
+
+                try {
+                    OrderEmailPayload payload = buildOrderEmailPayload(saved);
+                    if (payload != null) {
+                        emailService.sendOrderCompletedEmail(payload);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to trigger checkAndAutoComplete email for Order #{}: {}", saved.getId(), e.getMessage());
+                }
             }
         }
     }
@@ -216,21 +245,101 @@ public class OrderServiceImpl implements OrderService {
         }
 
         String newStatus = status.trim().toUpperCase();
+        boolean wasPending = "PENDING".equalsIgnoreCase(currentStatus);
+        boolean isNowCompleted = "COMPLETED".equalsIgnoreCase(newStatus);
+        boolean isNowCancelled = "CANCELLED".equalsIgnoreCase(newStatus);
 
         User currentUser = getCurrentAuthenticatedUser();
 
         // If cancelling order, restore stock and adjust payment status if PAID within 2h
-        if ("CANCELLED".equals(newStatus)) {
+        if (isNowCancelled) {
             restoreStockAndLogMovements(order, currentUser);
         } else {
             order.setStatus(newStatus);
-            if ("COMPLETED".equals(newStatus)) {
+            if (isNowCompleted) {
                 order.setPaymentStatus(PaymentStatus.PAID);
             }
         }
 
         Order updated = orderRepository.save(order);
+
+        if (wasPending && isNowCompleted) {
+            try {
+                OrderEmailPayload payload = buildOrderEmailPayload(updated);
+                if (payload != null) {
+                    emailService.sendOrderCompletedEmail(payload);
+                }
+            } catch (Exception e) {
+                log.error("Failed to trigger order completed email for Order #{}: {}", updated.getId(), e.getMessage());
+            }
+        } else if (isNowCancelled) {
+            try {
+                OrderEmailPayload payload = buildOrderEmailPayload(updated);
+                if (payload != null) {
+                    boolean refundStatus = updated.getPaymentStatus() == PaymentStatus.REFUNDED;
+                    BigDecimal refundAmt = refundStatus
+                            ? (payload.getTotalAmount() != null ? payload.getTotalAmount() : BigDecimal.ZERO)
+                            : BigDecimal.ZERO;
+                    payload.setRefunded(refundStatus);
+                    payload.setRefundAmount(refundAmt);
+                    emailService.sendOrderCancelledEmail(payload, refundStatus);
+                    emailService.sendAdminOrderCancelledAlertEmail(payload, refundStatus, "Admin");
+                }
+            } catch (Exception e) {
+                log.error("Failed to trigger order cancelled email for Order #{}: {}", updated.getId(), e.getMessage());
+            }
+        }
+
         return OrderMapper.toResponse(updated);
+    }
+
+    private OrderEmailPayload buildOrderEmailPayload(Order order) {
+        if (order == null || order.getUser() == null) {
+            return null;
+        }
+
+        List<OrderEmailItemDto> items = new ArrayList<>();
+        if (order.getOrderItems() != null) {
+            for (OrderItem oi : order.getOrderItems()) {
+                String pName = "Product";
+                String imgUrl = null;
+                if (oi.getProduct() != null) {
+                    pName = oi.getProduct().getName() != null ? oi.getProduct().getName() : "Product";
+                    imgUrl = oi.getProduct().getImageUrl();
+                }
+                BigDecimal price = BigDecimal.valueOf(oi.getPrice());
+                BigDecimal lineTotal = price.multiply(BigDecimal.valueOf(oi.getQuantity()));
+                items.add(OrderEmailItemDto.builder()
+                        .productName(pName)
+                        .quantity(oi.getQuantity())
+                        .price(price)
+                        .lineTotal(lineTotal)
+                        .imageUrl(imgUrl)
+                        .build());
+            }
+        }
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm");
+        String formattedDate = order.getOrderDate() != null ? order.getOrderDate().format(formatter) : "";
+
+        String phone = order.getUser().getPhone() != null ? order.getUser().getPhone() : "";
+
+        return OrderEmailPayload.builder()
+                .orderId(order.getId())
+                .recipientEmail(order.getUser().getEmail())
+                .customerName(order.getUser().getFullName())
+                .username(order.getUser().getUsername())
+                .phone(phone)
+                .shippingAddress(order.getShippingAddress())
+                .paymentMethod(order.getPaymentMethod() != null ? order.getPaymentMethod().name() : "N/A")
+                .subtotal(order.getSubtotal() != null ? order.getSubtotal() : BigDecimal.ZERO)
+                .shippingCost(order.getShippingCost() != null ? order.getShippingCost() : BigDecimal.ZERO)
+                .taxAmount(order.getTaxAmount() != null ? order.getTaxAmount() : BigDecimal.ZERO)
+                .totalAmount(order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO)
+                .orderDate(formattedDate)
+                .paymentStatus(order.getPaymentStatus() != null ? order.getPaymentStatus().name() : "UNPAID")
+                .items(items)
+                .build();
     }
 
     @Override
@@ -258,6 +367,23 @@ public class OrderServiceImpl implements OrderService {
 
         restoreStockAndLogMovements(order, currentUser);
         Order updated = orderRepository.save(order);
+
+        try {
+            OrderEmailPayload payload = buildOrderEmailPayload(updated);
+            if (payload != null) {
+                boolean refundStatus = updated.getPaymentStatus() == PaymentStatus.REFUNDED;
+                BigDecimal refundAmt = refundStatus
+                        ? (payload.getTotalAmount() != null ? payload.getTotalAmount() : BigDecimal.ZERO)
+                        : BigDecimal.ZERO;
+                payload.setRefunded(refundStatus);
+                payload.setRefundAmount(refundAmt);
+                emailService.sendOrderCancelledEmail(payload, refundStatus);
+                emailService.sendAdminOrderCancelledAlertEmail(payload, refundStatus, "Customer Self-Cancel");
+            }
+        } catch (Exception e) {
+            log.error("Failed to trigger order cancelled email for self-cancelled Order #{}: {}", updated.getId(), e.getMessage());
+        }
+
         return OrderMapper.toResponse(updated);
     }
 
@@ -298,6 +424,9 @@ public class OrderServiceImpl implements OrderService {
             if (!p.isActive()) {
                 throw new BadRequestException("Cannot order deactivated product: " + p.getName());
             }
+            if (p.getStock() <= 0) {
+                throw new BadRequestException("This product is coming soon and cannot be ordered until stock arrives.");
+            }
             if (p.getStock() < input.quantity) {
                 throw new BadRequestException("Insufficient stock for product: " + p.getName()
                         + ". Available: " + p.getStock() + ", Requested: " + input.quantity);
@@ -307,19 +436,34 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal subtotal = BigDecimal.ZERO;
         List<OrderItem> orderItems = new ArrayList<>();
         List<StockMovement> stockMovements = new ArrayList<>();
+        List<StockAlertEmailPayload> stockAlerts = new ArrayList<>();
 
         for (OrderItemInput input : itemInputs) {
             Product product = input.product;
             int previousStock = product.getStock();
             int newStock = previousStock - input.quantity;
             product.setStock(newStock);
-            productRepository.save(product);
+            Product savedProduct = productRepository.save(product);
+
+            if (newStock <= savedProduct.getReorderLevel()) {
+                String brandName = savedProduct.getBrand() != null ? savedProduct.getBrand().getName() : "N/A";
+                String categoryName = savedProduct.getCategory() != null ? savedProduct.getCategory().getName() : "N/A";
+                stockAlerts.add(StockAlertEmailPayload.builder()
+                        .productId(savedProduct.getId())
+                        .productName(savedProduct.getName())
+                        .brandName(brandName)
+                        .categoryName(categoryName)
+                        .previousStock(previousStock)
+                        .currentStock(newStock)
+                        .reorderLevel(savedProduct.getReorderLevel())
+                        .build());
+            }
 
             BigDecimal unitPrice = BigDecimal.valueOf(input.price).setScale(2, RoundingMode.HALF_UP);
             BigDecimal itemTotal = unitPrice.multiply(BigDecimal.valueOf(input.quantity));
 
             OrderItem orderItem = new OrderItem();
-            orderItem.setProduct(product);
+            orderItem.setProduct(savedProduct);
             orderItem.setQuantity(input.quantity);
             orderItem.setPrice(input.price);
             orderItem.setOrder(order);
@@ -328,7 +472,7 @@ public class OrderServiceImpl implements OrderService {
             subtotal = subtotal.add(itemTotal);
 
             stockMovements.add(StockMovement.builder()
-                    .product(product)
+                    .product(savedProduct)
                     .type(MovementType.STOCK_OUT)
                     .quantity(input.quantity)
                     .previousStock(previousStock)
@@ -355,6 +499,15 @@ public class OrderServiceImpl implements OrderService {
         for (StockMovement movement : stockMovements) {
             movement.setReason("Order #" + saved.getId());
             stockMovementRepository.save(movement);
+        }
+
+        for (StockAlertEmailPayload alert : stockAlerts) {
+            alert.setTriggerSource("Customer Order #" + saved.getId());
+            try {
+                emailService.sendAdminStockAlertEmail(alert);
+            } catch (Exception e) {
+                log.error("Failed to trigger admin stock alert for Product #{}: {}", alert.getProductId(), e.getMessage());
+            }
         }
 
         return saved;

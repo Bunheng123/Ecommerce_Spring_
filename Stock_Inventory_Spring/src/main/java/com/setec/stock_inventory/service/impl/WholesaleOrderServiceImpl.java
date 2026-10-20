@@ -20,7 +20,10 @@ import com.setec.stock_inventory.repo.UserRepository;
 import com.setec.stock_inventory.repo.WholesaleBuyerRepository;
 import com.setec.stock_inventory.repo.WholesaleOrderRepository;
 import com.setec.stock_inventory.service.WholesaleOrderService;
+import com.setec.stock_inventory.dto.email.StockAlertEmailPayload;
+import com.setec.stock_inventory.service.EmailService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -30,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class WholesaleOrderServiceImpl implements WholesaleOrderService {
@@ -39,6 +43,7 @@ public class WholesaleOrderServiceImpl implements WholesaleOrderService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final EmailService emailService;
 
     @Override
     @Transactional
@@ -144,16 +149,33 @@ public class WholesaleOrderServiceImpl implements WholesaleOrderService {
             }
         }
 
+        List<StockAlertEmailPayload> stockAlerts = new ArrayList<>();
+
         // Deduct stock and log stock movement
         for (WholesaleOrderItem item : order.getItems()) {
             Product product = item.getProduct();
             int previousStock = product.getStock();
             int newStock = previousStock - item.getQuantity();
             product.setStock(newStock);
-            productRepository.save(product);
+            Product savedProduct = productRepository.save(product);
+
+            if (newStock <= savedProduct.getReorderLevel()) {
+                String brandName = savedProduct.getBrand() != null ? savedProduct.getBrand().getName() : "N/A";
+                String categoryName = savedProduct.getCategory() != null ? savedProduct.getCategory().getName() : "N/A";
+                stockAlerts.add(StockAlertEmailPayload.builder()
+                        .productId(savedProduct.getId())
+                        .productName(savedProduct.getName())
+                        .brandName(brandName)
+                        .categoryName(categoryName)
+                        .previousStock(previousStock)
+                        .currentStock(newStock)
+                        .reorderLevel(savedProduct.getReorderLevel())
+                        .triggerSource("Wholesale Order #" + order.getId())
+                        .build());
+            }
 
             StockMovement movement = StockMovement.builder()
-                    .product(product)
+                    .product(savedProduct)
                     .type(MovementType.STOCK_OUT)
                     .quantity(item.getQuantity())
                     .previousStock(previousStock)
@@ -167,6 +189,15 @@ public class WholesaleOrderServiceImpl implements WholesaleOrderService {
 
         order.setStatus(WholesaleOrderStatus.COMPLETED);
         WholesaleOrder updated = wholesaleOrderRepository.save(order);
+
+        for (StockAlertEmailPayload alert : stockAlerts) {
+            try {
+                emailService.sendAdminStockAlertEmail(alert);
+            } catch (Exception e) {
+                log.error("Failed to trigger admin stock alert for Product #{}: {}", alert.getProductId(), e.getMessage());
+            }
+        }
+
         return WholesaleOrderMapper.toResponse(updated);
     }
 

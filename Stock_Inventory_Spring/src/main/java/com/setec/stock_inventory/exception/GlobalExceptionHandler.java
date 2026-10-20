@@ -20,7 +20,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ApiResponse<Object>> handleBadRequestException(BadRequestException ex) {
         return new ResponseEntity<>(
-                ApiResponse.error("Error : " + ex.getMessage()),
+                ApiResponse.error(ex.getMessage()),
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
+    @ExceptionHandler(org.springframework.security.authentication.DisabledException.class)
+    public ResponseEntity<ApiResponse<Object>> handleDisabledException(org.springframework.security.authentication.DisabledException ex) {
+        return new ResponseEntity<>(
+                ApiResponse.error("Your account has been deactivated by an administrator."),
                 HttpStatus.BAD_REQUEST
         );
     }

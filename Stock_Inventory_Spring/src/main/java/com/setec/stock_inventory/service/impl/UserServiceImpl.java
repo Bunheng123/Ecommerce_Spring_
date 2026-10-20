@@ -108,10 +108,33 @@ public class UserServiceImpl implements UserService {
             }
         }
 
+        if (request.getActive() != null) {
+            User currentUser = getCurrentAuthenticatedUser();
+            if (currentUser.getId().equals(id) && !request.getActive()) {
+                throw new BadRequestException("You cannot deactivate your own admin account");
+            }
+            user.setActive(request.getActive());
+        }
+
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
         }
 
+        User updatedUser = userRepository.save(user);
+        return UserMapper.toResponse(updatedUser);
+    }
+
+    @Override
+    @Transactional
+    public UserResponseDto toggleUserStatus(Long id) {
+        User currentUser = getCurrentAuthenticatedUser();
+        if (currentUser.getId().equals(id)) {
+            throw new BadRequestException("You cannot deactivate your own admin account");
+        }
+        User user = userRepository.findById(id).orElseThrow(
+                () -> new ResourceNotFoundException("User not found with id " + id)
+        );
+        user.setActive(!user.isActive());
         User updatedUser = userRepository.save(user);
         return UserMapper.toResponse(updatedUser);
     }

@@ -18,6 +18,8 @@ public interface UserService {
 
     UserResponseDto updateUser(Long id, UserRequestDto request);
 
+    UserResponseDto toggleUserStatus(Long id);
+
     void deleteUser(Long id);
 
     UserResponseDto getCurrentUserProfile();

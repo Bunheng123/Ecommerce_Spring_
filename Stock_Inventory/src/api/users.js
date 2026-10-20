@@ -67,8 +67,20 @@ export async function updateUser(id, data) {
   if (data.role !== undefined) payload.role = String(data.role).trim().toUpperCase();
   if (data.phone !== undefined) payload.phone = data.phone ? data.phone.trim() : '';
   if (data.password && data.password.trim() !== '') payload.password = data.password.trim();
+  if (data.active !== undefined) payload.active = Boolean(data.active);
 
   const response = await apiClient.put(`/users/${id}`, payload);
+  return response.data?.data ?? response.data;
+}
+
+/**
+ * Toggle user active/deactivated status (ADMIN only)
+ * PATCH /api/users/{id}/toggle-status
+ * @param {string|number} id
+ * @returns {Promise<Object>} Updated user object
+ */
+export async function toggleUserStatus(id) {
+  const response = await apiClient.patch(`/users/${id}/toggle-status`);
   return response.data?.data ?? response.data;
 }
 

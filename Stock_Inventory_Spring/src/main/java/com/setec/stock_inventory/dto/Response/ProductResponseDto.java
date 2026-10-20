@@ -29,4 +29,5 @@ public class ProductResponseDto {
     private Long categoryId;
     private String categoryName;
     private java.util.List<String> galleryImageUrls;
+    private boolean comingSoon;
 }

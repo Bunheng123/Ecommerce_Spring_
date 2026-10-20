@@ -36,14 +36,17 @@ export default function ProductCard({
 
   const numStock = Number(stock ?? 0);
   const threshold = (reorderLevel != null && reorderLevel > 0) ? reorderLevel : 5;
-  const isSoldOut = stock === 0 || numStock <= 0;
-  const isLowStock = !isSoldOut && (numStock <= threshold || numStock <= 5);
+  const isComingSoon = (stock === 0 || numStock <= 0) && Boolean(item.comingSoon);
+  const isSoldOut = !isComingSoon && (stock === 0 || numStock <= 0);
+  const isLowStock = !isComingSoon && !isSoldOut && (numStock <= threshold || numStock <= 5);
 
   // Auto-determine retail scarcity badge
   let computedBadge = item.badge || null;
   if (!computedBadge) {
     if (!active) {
       computedBadge = 'Archived';
+    } else if (isComingSoon) {
+      computedBadge = 'COMING SOON';
     } else if (isSoldOut) {
       computedBadge = 'Out of Stock';
     } else if (isLowStock) {
@@ -57,6 +60,13 @@ export default function ProductCard({
     'flex h-[38px] items-center justify-center text-xs font-bold uppercase tracking-[0.08em] transition-colors';
 
   const renderBadge = () => {
+    if (isComingSoon || computedBadge === 'COMING SOON' || computedBadge === 'Coming Soon') {
+      return (
+        <span className="absolute left-3 top-3 border border-ink bg-white px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-ink">
+          COMING SOON
+        </span>
+      );
+    }
     if (!computedBadge) return null;
     if (computedBadge === 'ARCHIVE' || computedBadge === 'Archived' || badgeType === 'outline') {
       return (
@@ -162,8 +172,8 @@ export default function ProductCard({
               ${Number(price).toFixed(2)}
             </p>
             {stock != null && (
-              <span className={`text-[10px] uppercase tracking-wider ${isLowStock ? 'font-bold text-neutral-900' : 'text-muted'}`}>
-                {soldOut ? 'Out of stock' : (isLowStock ? `Only ${numStock} left` : 'In stock')}
+              <span className={`text-[10px] uppercase tracking-wider ${isComingSoon ? 'font-bold text-ink' : isLowStock ? 'font-bold text-neutral-900' : 'text-muted'}`}>
+                {isComingSoon ? 'Coming Soon' : (soldOut ? 'Out of stock' : (isLowStock ? `Only ${numStock} left` : 'In stock'))}
               </span>
             )}
           </div>
@@ -171,25 +181,35 @@ export default function ProductCard({
       </div>
 
       <div className="px-4 pb-4">
-        <button
-          type="button"
-          disabled={soldOut || isAdding}
-          onClick={async () => {
-            setErrorMessage('');
-            setIsAdding(true);
-            try {
-              if (onAdd) await onAdd(item);
-              else await addItem(item, 1);
-            } catch (err) {
-              setErrorMessage(err.message || 'Unable to add to cart');
-            } finally {
-              setIsAdding(false);
-            }
-          }}
-          className={`${btn} w-full border border-ink bg-ink text-white hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}
-        >
-          {isAdding ? 'Adding...' : 'Add to cart'}
-        </button>
+        {isComingSoon ? (
+          <button
+            type="button"
+            disabled
+            className={`${btn} w-full border border-line bg-chip text-[11px] text-muted cursor-not-allowed`}
+          >
+            COMING SOON
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={soldOut || isAdding}
+            onClick={async () => {
+              setErrorMessage('');
+              setIsAdding(true);
+              try {
+                if (onAdd) await onAdd(item);
+                else await addItem(item, 1);
+              } catch (err) {
+                setErrorMessage(err.message || 'Unable to add to cart');
+              } finally {
+                setIsAdding(false);
+              }
+            }}
+            className={`${btn} w-full border border-ink bg-ink text-white hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}
+          >
+            {isAdding ? 'Adding...' : 'Add to cart'}
+          </button>
+        )}
 
         {errorMessage && (
           <p className="mt-2 text-[11px] text-red-600 font-medium">

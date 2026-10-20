@@ -90,6 +90,14 @@ public class UserController {
         );
     }
 
+    @PatchMapping("/{id:[0-9]+}/toggle-status")
+    public ResponseEntity<ApiResponse<UserResponseDto>> toggleUserStatus(@PathVariable Long id) {
+        UserResponseDto updatedUser = userService.toggleUserStatus(id);
+        return ResponseEntity.ok(
+                ApiResponse.success("User status toggled successfully", updatedUser)
+        );
+    }
+
     @DeleteMapping("/{id:[0-9]+}")
     public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);

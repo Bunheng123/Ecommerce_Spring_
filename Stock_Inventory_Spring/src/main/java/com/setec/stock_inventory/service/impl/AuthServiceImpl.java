@@ -55,9 +55,22 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
-        );
+        String loginIdentifier = request.getUsername() != null ? request.getUsername().trim() : "";
+        User user = userRepository.findByUsername(loginIdentifier)
+                .or(() -> userRepository.findByEmail(loginIdentifier))
+                .orElse(null);
+
+        if (user != null && !user.isActive()) {
+            throw new BadRequestException("Your account has been deactivated by an administrator.");
+        }
+
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
+            );
+        } catch (org.springframework.security.authentication.DisabledException e) {
+            throw new BadRequestException("Your account has been deactivated by an administrator.");
+        }
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(request.getUsername());
         String token = jwtService.generateToken(userDetails);

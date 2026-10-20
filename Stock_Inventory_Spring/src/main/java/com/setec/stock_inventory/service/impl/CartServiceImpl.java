@@ -52,6 +52,10 @@ public class CartServiceImpl implements CartService {
             throw new BadRequestException("Cannot add inactive product to cart: " + product.getName());
         }
 
+        if (product.getStock() <= 0) {
+            throw new BadRequestException("This product is coming soon and cannot be ordered until stock arrives.");
+        }
+
         Cart cart = getOrCreateCart(currentUser);
 
         Optional<CartItem> existingItemOpt = cart.getItems().stream()
@@ -95,6 +99,9 @@ public class CartServiceImpl implements CartService {
                 .orElseThrow(() -> new ResourceNotFoundException("Cart item with id " + itemId + " not found in current cart"));
 
         Product product = item.getProduct();
+        if (product.getStock() <= 0) {
+            throw new BadRequestException("This product is coming soon and cannot be ordered until stock arrives.");
+        }
         if (request.getQuantity() > product.getStock()) {
             throw new BadRequestException("Requested quantity (" + request.getQuantity() +
                     ") exceeds available stock (" + product.getStock() + ") for product: " + product.getName());

@@ -32,19 +32,29 @@ public class DataSeeder implements CommandLineRunner {
             jdbcTemplate.execute("UPDATE orders SET subtotal = total_amount WHERE subtotal IS NULL;");
             jdbcTemplate.execute("UPDATE orders SET shipping_cost = 0.00 WHERE shipping_cost IS NULL;");
             jdbcTemplate.execute("UPDATE orders SET tax_amount = 0.00 WHERE tax_amount IS NULL;");
+            jdbcTemplate.execute("UPDATE users SET email = 'hengheng514.514@gmail.com' WHERE email = 'hengheng513.513@gmail.com' AND user_name != 'admin';");
+            jdbcTemplate.execute("UPDATE users SET email = 'hengheng513.513@gmail.com' WHERE user_name = 'admin';");
         } catch (Exception e) {
             log.warn("Could not execute startup schema updates: {}", e.getMessage());
         }
 
+        userRepository.findByUsername("customer2").ifPresent(c2 -> {
+            if (!"hengheng514.514@gmail.com".equalsIgnoreCase(c2.getEmail())) {
+                c2.setEmail("hengheng514.514@gmail.com");
+                userRepository.save(c2);
+            }
+        });
+
         User admin = userRepository.findByUsername("admin").orElseGet(() -> User.builder()
                 .username("admin")
-                .email("admin@example.com")
+                .email("hengheng513.513@gmail.com")
                 .role(Role.ADMIN)
                 .build());
         admin.setPassword(passwordEncoder.encode("admin123"));
         admin.setRole(Role.ADMIN);
+        admin.setEmail("hengheng513.513@gmail.com");
         userRepository.save(admin);
-        log.info("Default ADMIN user ready: username='admin', password='admin123', role='ADMIN'");
+        log.info("Default ADMIN user ready: username='admin', password='admin123', email='hengheng513.513@gmail.com', role='ADMIN'");
 
         User stock = userRepository.findByUsername("stock").orElseGet(() -> User.builder()
                 .username("stock")

@@ -27,6 +27,7 @@ export default function UserForm({
     password: '',
     phone: '',
     role: 'USER',
+    active: true,
   });
 
   const [profilePreview, setProfilePreview] = useState(null);
@@ -42,6 +43,7 @@ export default function UserForm({
         password: '', // Blank by default on edit
         phone: initialData.phone || '', // Show phone if has, else blank
         role: initialData.role ? String(initialData.role).toUpperCase() : 'USER',
+        active: initialData.active !== false,
       });
       setProfilePreview(initialData.profileImageUrl || null);
       setProfileFile(null);
@@ -53,6 +55,7 @@ export default function UserForm({
         password: '',
         phone: '',
         role: 'USER',
+        active: true,
       });
       setProfilePreview(null);
       setProfileFile(null);
@@ -76,6 +79,7 @@ export default function UserForm({
       email: formData.email.trim(),
       role: formData.role,
       phone: formData.phone.trim(),
+      active: formData.active,
     };
 
     if (formData.username && formData.username.trim()) {
@@ -352,6 +356,35 @@ export default function UserForm({
               <option value="USER">USER (Customer Store Access)</option>
               <option value="STOCK">STOCK (Warehouse &amp; Logistics)</option>
               <option value="ADMIN">ADMIN (Full System Privileges)</option>
+            </select>
+          )}
+        </div>
+
+        {/* 7. Status */}
+        <div>
+          <label className="block text-[10px] font-black uppercase tracking-wider text-neutral-700 mb-1">
+            Status
+          </label>
+          {isView ? (
+            <div className="pt-0.5">
+              <span
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider border ${
+                  formData.active
+                    ? 'border-neutral-900 text-neutral-900 bg-white'
+                    : 'border-neutral-300 text-neutral-400 bg-neutral-50'
+                }`}
+              >
+                {formData.active ? 'ACTIVE' : 'INACTIVE'}
+              </span>
+            </div>
+          ) : (
+            <select
+              value={formData.active ? 'true' : 'false'}
+              onChange={(e) => setFormData({ ...formData, active: e.target.value === 'true' })}
+              className="w-full bg-[#F6F7FB] border border-neutral-200 text-xs font-bold text-neutral-800 rounded-xl px-3.5 py-2.5 outline-none focus:border-neutral-900 focus:bg-white transition-all cursor-pointer"
+            >
+              <option value="true">ACTIVE (Account Enabled)</option>
+              <option value="false">INACTIVE (Account Deactivated)</option>
             </select>
           )}
         </div>

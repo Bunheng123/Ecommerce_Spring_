@@ -6,6 +6,7 @@ import {
   getAllUsers,
   createUser,
   updateUser,
+  toggleUserStatus,
   deleteUser,
   uploadUserProfilePicture,
 } from '../../api/users';
@@ -142,6 +143,51 @@ export default function UsersPage() {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Toggle User Active / Inactive Status
+  const handleToggleUserStatus = async (userToToggle) => {
+    const isCurrentlyActive = userToToggle.active !== false;
+    const isSelf =
+      currentUser &&
+      (Number(currentUser.id) === Number(userToToggle.id) ||
+        currentUser.username === userToToggle.username);
+
+    if (isSelf) {
+      AlertDialog.fire({
+        title: 'Action Prohibited',
+        text: 'You cannot deactivate your own admin account.',
+      });
+      return;
+    }
+
+    const displayName = userToToggle.fullName || userToToggle.username || `User #${userToToggle.id}`;
+    const result = await ConfirmDialog.fire({
+      title: `${isCurrentlyActive ? 'Deactivate' : 'Activate'} User?`,
+      text: isCurrentlyActive
+        ? `Are you sure you want to deactivate ${displayName}? They will be blocked from logging in immediately.`
+        : `Are you sure you want to activate ${displayName}? They will regain access to their account.`,
+      confirmButtonText: isCurrentlyActive ? 'Yes, Deactivate' : 'Yes, Activate',
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const updated = await toggleUserStatus(userToToggle.id);
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userToToggle.id ? { ...u, ...updated } : u))
+      );
+      Toast.fire({
+        title: `User ${isCurrentlyActive ? 'deactivated' : 'activated'} successfully`,
+      });
+    } catch (err) {
+      console.error('Failed to toggle user status:', err);
+      const msg = err.response?.data?.message || err.message || 'Action failed';
+      AlertDialog.fire({
+        title: 'Action Failed',
+        text: typeof msg === 'string' ? msg.replace(/^Error\s*:\s*/i, '') : 'Action failed',
+      });
     }
   };
 
@@ -347,6 +393,9 @@ export default function UsersPage() {
                 <th className="px-6 py-3.5 text-[10px] font-black uppercase tracking-[0.14em] text-neutral-500 whitespace-nowrap">
                   Role
                 </th>
+                <th className="px-6 py-3.5 text-[10px] font-black uppercase tracking-[0.14em] text-neutral-500 whitespace-nowrap">
+                  Status
+                </th>
                 <th className="px-6 py-3.5 text-[10px] font-black uppercase tracking-[0.14em] text-neutral-500 whitespace-nowrap text-right">
                   Actions
                 </th>
@@ -355,7 +404,7 @@ export default function UsersPage() {
             <tbody className="divide-y divide-neutral-100 text-xs">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center text-neutral-400 font-mono text-xs uppercase tracking-wider">
+                  <td colSpan={7} className="px-6 py-16 text-center text-neutral-400 font-mono text-xs uppercase tracking-wider">
                     Loading users directory...
                   </td>
                 </tr>
@@ -445,9 +494,38 @@ export default function UsersPage() {
                         </span>
                       </td>
 
+                      {/* Status Pill (Plain Outlined Text Pill) */}
+                      <td className="px-6 py-3.5 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider border ${
+                            row.active !== false
+                              ? 'bg-white text-neutral-900 border-neutral-300'
+                              : 'bg-neutral-100 text-neutral-400 border-neutral-300'
+                          }`}
+                        >
+                          {row.active !== false ? 'ACTIVE' : 'INACTIVE'}
+                        </span>
+                      </td>
+
                       {/* Actions */}
                       <td className="px-6 py-3.5 whitespace-nowrap text-right">
                         <div className="inline-flex items-center justify-end gap-2">
+                          {/* ACTIVATE / DEACTIVATE Action: Hidden on current admin's own row */}
+                          {!isSelf && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleUserStatus(row)}
+                              title={row.active !== false ? 'Deactivate user' : 'Activate user'}
+                              className={`px-2.5 py-1 text-[11px] font-black uppercase tracking-wider rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
+                                row.active !== false
+                                  ? 'text-neutral-700 hover:text-red-600 bg-neutral-100 hover:bg-red-50'
+                                  : 'text-neutral-900 hover:text-black bg-neutral-100 hover:bg-neutral-200'
+                              }`}
+                            >
+                              <span>{row.active !== false ? 'Deactivate' : 'Activate'}</span>
+                            </button>
+                          )}
+
                           {/* VIEW Action: Always available for all rows */}
                           <button
                             type="button"
@@ -496,7 +574,7 @@ export default function UsersPage() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-14 text-center text-neutral-400">
+                  <td colSpan={7} className="px-6 py-14 text-center text-neutral-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <div className="h-12 w-12 rounded-2xl bg-neutral-100 text-neutral-400 flex items-center justify-center font-black text-lg">
                         ∅

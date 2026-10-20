@@ -45,8 +45,9 @@ const toCard = (p) => {
   const category = p.category?.name ?? p.categoryName ?? 'HARDWARE';
   const numStock = Number(stock ?? 0);
   const threshold = (p.reorderLevel != null && p.reorderLevel > 0) ? p.reorderLevel : 5;
-  const isSoldOut = stock === 0 || numStock <= 0;
-  const isLowStock = !isSoldOut && (numStock <= threshold || numStock <= 5);
+  const isComingSoon = (stock === 0 || numStock <= 0) && Boolean(p.comingSoon);
+  const isSoldOut = !isComingSoon && (stock === 0 || numStock <= 0);
+  const isLowStock = !isComingSoon && !isSoldOut && (numStock <= threshold || numStock <= 5);
   return {
     ...p,
     id: p.id,
@@ -55,13 +56,14 @@ const toCard = (p) => {
     price: p.price,
     imageUrl: p.imageUrl,
     stock: p.stock,
+    comingSoon: p.comingSoon,
     costPrice: p.costPrice,
     reorderLevel: p.reorderLevel,
     categoryId: p.categoryId,
     categoryName: category,
     galleryImageUrls: p.galleryImageUrls,
     label: p.label || `${category.toUpperCase()} / ${String(p.id).padStart(2, '0')}`,
-    badge: p.badge || (isSoldOut ? 'Out of stock' : isLowStock ? `Only ${numStock} left` : null),
+    badge: p.badge || (isComingSoon ? 'COMING SOON' : isSoldOut ? 'Out of stock' : isLowStock ? `Only ${numStock} left` : null),
   };
 };
 
@@ -108,7 +110,12 @@ export default function HomePage() {
     fetchProducts()
       .then((data) => {
         if (Array.isArray(data)) {
-          const sorted = [...data].sort((a, b) => {
+          const visible = data.filter((p) => {
+            if (p.active === false) return false;
+            const s = Number(p.stock ?? p.quantity ?? 0);
+            return s > 0 || Boolean(p.comingSoon);
+          });
+          const sorted = [...visible].sort((a, b) => {
             if (a.createdAt && b.createdAt) {
               const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
               if (diff !== 0) return diff;

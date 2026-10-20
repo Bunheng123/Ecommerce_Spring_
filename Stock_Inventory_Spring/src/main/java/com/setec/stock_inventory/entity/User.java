@@ -47,6 +47,10 @@ public class User {
     @Column(length = 20)
     private String phone;
 
+    @Builder.Default
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private boolean active = true;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 
