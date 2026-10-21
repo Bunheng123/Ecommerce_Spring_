@@ -19,6 +19,8 @@ public class WholesaleOrderMapper {
                 ? order.getItems().stream().map(WholesaleOrderMapper::toItemResponse).toList()
                 : Collections.emptyList();
 
+        boolean anyBelowCost = itemResponses.stream().anyMatch(it -> it != null && it.isBelowCostPrice());
+
         return WholesaleOrderResponseDto.builder()
                 .id(order.getId())
                 .buyerId(order.getBuyer() != null ? order.getBuyer().getId() : null)
@@ -31,6 +33,7 @@ public class WholesaleOrderMapper {
                 .orderDate(order.getOrderDate())
                 .updateDate(order.getUpdateDate())
                 .items(itemResponses)
+                .belowCostPrice(anyBelowCost)
                 .build();
     }
 
@@ -39,6 +42,13 @@ public class WholesaleOrderMapper {
             return null;
         }
 
+        Double cp = item.getProduct() != null ? item.getProduct().getCostPrice() : null;
+        java.math.BigDecimal productCost = cp != null
+                ? java.math.BigDecimal.valueOf(cp).setScale(2, java.math.RoundingMode.HALF_UP)
+                : java.math.BigDecimal.ZERO;
+        boolean belowCost = productCost.compareTo(java.math.BigDecimal.ZERO) > 0
+                && java.math.BigDecimal.valueOf(item.getWholesalePrice()).compareTo(productCost) < 0;
+
         return WholesaleOrderItemResponseDto.builder()
                 .id(item.getId())
                 .productId(item.getProduct() != null ? item.getProduct().getId() : null)
@@ -46,6 +56,8 @@ public class WholesaleOrderMapper {
                 .quantity(item.getQuantity())
                 .wholesalePrice(item.getWholesalePrice())
                 .subtotal(item.getQuantity() * item.getWholesalePrice())
+                .belowCostPrice(belowCost)
+                .productCostPrice(productCost)
                 .build();
     }
 }

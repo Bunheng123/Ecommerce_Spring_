@@ -364,93 +364,109 @@ export default function PurchaseOrderForm({
             <div className="space-y-3">
               {items.map((item, index) => {
                 const lineSubtotal = (Number(item.quantity) || 0) * (Number(item.costPrice) || 0);
+                const selectedProd = products.find((p) => String(p.id) === String(item.productId));
+                const retailPrice = selectedProd ? Number(selectedProd.price || 0) : 0;
+                const costPriceNum = Number(item.costPrice || 0);
+                const isCostExceedsRetail = selectedProd && retailPrice > 0 && costPriceNum > retailPrice;
+
                 return (
                   <div
                     key={index}
-                    className="p-3.5 bg-[#FBFBFC] border border-neutral-200 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-3"
+                    className="p-3.5 bg-[#FBFBFC] border border-neutral-200 rounded-xl flex flex-col gap-2"
                   >
-                    {/* Item Number */}
-                    <span className="font-mono text-xs font-black text-neutral-400 shrink-0">
-                      #{index + 1}
-                    </span>
-
-                    {/* Product Selector */}
-                    <div className="flex-1 min-w-[180px]">
-                      <select
-                        value={item.productId}
-                        onChange={(e) => handleProductChange(index, e.target.value)}
-                        className="w-full text-xs font-bold rounded-lg px-2.5 py-2 bg-white border border-neutral-200 text-neutral-800 focus:border-neutral-900 outline-none transition-all cursor-pointer"
-                      >
-                        <option value="">-- Select Product --</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} (Stock: {p.stock ?? 0})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Quantity */}
-                    <div className="w-24 shrink-0">
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="1"
-                          step="1"
-                          value={item.quantity}
-                          onChange={(e) => handleQuantityChange(index, e.target.value)}
-                          placeholder="Qty"
-                          className="w-full text-xs font-mono font-bold rounded-lg px-2.5 py-2 bg-white border border-neutral-200 text-neutral-800 focus:border-neutral-900 outline-none"
-                        />
-                      </div>
-                      <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider block mt-0.5">
-                        Units
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                      {/* Item Number */}
+                      <span className="font-mono text-xs font-black text-neutral-400 shrink-0">
+                        #{index + 1}
                       </span>
-                    </div>
 
-                    {/* Unit Cost Price */}
-                    <div className="w-28 shrink-0">
-                      <div className="relative">
-                        <span className="absolute left-2.5 top-2 text-neutral-400 font-mono text-xs font-bold">
-                          $
+                      {/* Product Selector */}
+                      <div className="flex-1 min-w-[180px]">
+                        <select
+                          value={item.productId}
+                          onChange={(e) => handleProductChange(index, e.target.value)}
+                          className="w-full text-xs font-bold rounded-lg px-2.5 py-2 bg-white border border-neutral-200 text-neutral-800 focus:border-neutral-900 outline-none transition-all cursor-pointer"
+                        >
+                          <option value="">-- Select Product --</option>
+                          {products.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} (Stock: {p.stock ?? 0}, Retail: ${Number(p.price || 0).toFixed(2)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Quantity */}
+                      <div className="w-24 shrink-0">
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={item.quantity}
+                            onChange={(e) => handleQuantityChange(index, e.target.value)}
+                            placeholder="Qty"
+                            className="w-full text-xs font-mono font-bold rounded-lg px-2.5 py-2 bg-white border border-neutral-200 text-neutral-800 focus:border-neutral-900 outline-none"
+                          />
+                        </div>
+                        <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider block mt-0.5">
+                          Units
                         </span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={item.costPrice}
-                          onChange={(e) => handleCostPriceChange(index, e.target.value)}
-                          placeholder="0.00"
-                          className="w-full text-xs font-mono font-bold rounded-lg pl-6 pr-2.5 py-2 bg-white border border-neutral-200 text-neutral-800 focus:border-neutral-900 outline-none"
-                        />
                       </div>
-                      <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider block mt-0.5">
-                        Unit Cost
-                      </span>
+
+                      {/* Unit Cost Price */}
+                      <div className="w-28 shrink-0">
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-2 text-neutral-400 font-mono text-xs font-bold">
+                            $
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.costPrice}
+                            onChange={(e) => handleCostPriceChange(index, e.target.value)}
+                            placeholder="0.00"
+                            className="w-full text-xs font-mono font-bold rounded-lg pl-6 pr-2.5 py-2 bg-white border border-neutral-200 text-neutral-800 focus:border-neutral-900 outline-none"
+                          />
+                        </div>
+                        <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider block mt-0.5">
+                          Unit Cost
+                        </span>
+                      </div>
+
+                      {/* Line Subtotal */}
+                      <div className="w-24 text-right shrink-0">
+                        <span className="font-mono text-xs font-black text-neutral-900 block">
+                          ${lineSubtotal.toFixed(2)}
+                        </span>
+                        <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider block mt-0.5">
+                          Subtotal
+                        </span>
+                      </div>
+
+                      {/* Remove Item Button */}
+                      <div className="shrink-0 flex items-center justify-end">
+                        <button
+                          type="button"
+                          disabled={items.length <= 1}
+                          onClick={() => handleRemoveItem(index)}
+                          className="w-7 h-7 rounded-lg border border-neutral-200 text-neutral-400 hover:text-red-600 hover:border-red-300 flex items-center justify-center transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Remove line item"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Line Subtotal */}
-                    <div className="w-24 text-right shrink-0">
-                      <span className="font-mono text-xs font-black text-neutral-900 block">
-                        ${lineSubtotal.toFixed(2)}
-                      </span>
-                      <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider block mt-0.5">
-                        Subtotal
-                      </span>
-                    </div>
-
-                    {/* Remove Item Button */}
-                    <div className="shrink-0 flex items-center justify-end">
-                      <button
-                        type="button"
-                        disabled={items.length <= 1}
-                        onClick={() => handleRemoveItem(index)}
-                        className="w-7 h-7 rounded-lg border border-neutral-200 text-neutral-400 hover:text-red-600 hover:border-red-300 flex items-center justify-center transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Remove line item"
-                      >
-                        ✕
-                      </button>
-                    </div>
+                    {isCostExceedsRetail && (
+                      <div className="text-[11px] text-neutral-900 font-bold pl-7 flex items-center gap-1.5 bg-neutral-100 border border-neutral-300 rounded-lg py-1.5 px-2.5">
+                        <span>⚠</span>
+                        <span>
+                          Notice: Supplier unit cost (${costPriceNum.toFixed(2)}) exceeds current retail selling price (${retailPrice.toFixed(2)}).
+                        </span>
+                      </div>
+                    )}
                   </div>
                 );
               })}

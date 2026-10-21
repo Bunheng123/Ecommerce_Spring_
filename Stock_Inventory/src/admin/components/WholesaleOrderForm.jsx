@@ -384,8 +384,8 @@ export default function WholesaleOrderForm({
 
                 // Check Cost Price Warning
                 // If entered wholesale unit price is below product's costPrice, show plain inline text warning (do not block submission)
-                const hasCostPrice = selectedProd && selectedProd.costPrice != null;
-                const costPriceNum = hasCostPrice ? Number(selectedProd.costPrice) : 0;
+                const hasCostPrice = selectedProd && (selectedProd.costPrice != null || selectedProd.activeFifoUnitCost != null);
+                const costPriceNum = hasCostPrice ? Math.max(Number(selectedProd.costPrice || 0), Number(selectedProd.activeFifoUnitCost || 0)) : 0;
                 const isBelowCost =
                   hasCostPrice &&
                   Number(item.wholesalePrice) > 0 &&

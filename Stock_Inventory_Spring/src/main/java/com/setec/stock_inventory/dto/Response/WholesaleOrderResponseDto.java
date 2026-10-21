@@ -26,4 +26,5 @@ public class WholesaleOrderResponseDto {
     private LocalDateTime orderDate;
     private LocalDateTime updateDate;
     private List<WholesaleOrderItemResponseDto> items;
+    private boolean belowCostPrice;
 }

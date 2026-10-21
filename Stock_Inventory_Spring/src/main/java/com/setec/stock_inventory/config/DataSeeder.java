@@ -18,6 +18,7 @@ public class DataSeeder implements CommandLineRunner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbcTemplate;
+    private final com.setec.stock_inventory.service.StockBatchService stockBatchService;
 
     @Override
     public void run(String... args) {
@@ -75,5 +76,11 @@ public class DataSeeder implements CommandLineRunner {
         customer.setRole(Role.USER);
         userRepository.save(customer);
         log.info("Default USER ready: username='customer1', password='customer123', role='USER'");
+
+        try {
+            stockBatchService.backfillInitialBatches();
+        } catch (Exception e) {
+            log.error("Failed to backfill initial stock batches: {}", e.getMessage());
+        }
     }
 }

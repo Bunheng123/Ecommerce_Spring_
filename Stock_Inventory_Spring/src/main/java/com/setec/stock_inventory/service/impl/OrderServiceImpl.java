@@ -56,6 +56,7 @@ public class OrderServiceImpl implements OrderService {
     private final StockMovementRepository stockMovementRepository;
     private final CartRepository cartRepository;
     private final EmailService emailService;
+    private final com.setec.stock_inventory.service.StockBatchService stockBatchService;
 
     @Autowired
     public OrderServiceImpl(
@@ -65,7 +66,8 @@ public class OrderServiceImpl implements OrderService {
             UserRepository userRepository,
             StockMovementRepository stockMovementRepository,
             CartRepository cartRepository,
-            EmailService emailService
+            EmailService emailService,
+            com.setec.stock_inventory.service.StockBatchService stockBatchService
     ) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
@@ -74,6 +76,7 @@ public class OrderServiceImpl implements OrderService {
         this.stockMovementRepository = stockMovementRepository;
         this.cartRepository = cartRepository;
         this.emailService = emailService;
+        this.stockBatchService = stockBatchService;
     }
 
     @Override
@@ -129,6 +132,14 @@ public class OrderServiceImpl implements OrderService {
                 .status("PENDING")
                 .orderDate(LocalDateTime.now())
                 .build();
+
+        String method = request.getPaymentMethod() != null ? request.getPaymentMethod().name().toUpperCase() : "";
+
+        if (method.contains("QR") || method.contains("BANK") || method.contains("KHQR") || method.contains("CARD")) {
+            order.setPaymentStatus(PaymentStatus.PAID);
+        } else {
+            order.setPaymentStatus(PaymentStatus.UNPAID);
+        }
 
         Order saved = processOrderCreation(order, itemInputs, currentUser);
 
@@ -444,6 +455,7 @@ public class OrderServiceImpl implements OrderService {
             int newStock = previousStock - input.quantity;
             product.setStock(newStock);
             Product savedProduct = productRepository.save(product);
+            stockBatchService.depleteStockFifo(savedProduct, input.quantity);
 
             if (newStock <= savedProduct.getReorderLevel()) {
                 String brandName = savedProduct.getBrand() != null ? savedProduct.getBrand().getName() : "N/A";
@@ -525,6 +537,7 @@ public class OrderServiceImpl implements OrderService {
                 int newStock = previousStock + item.getQuantity();
                 product.setStock(newStock);
                 productRepository.save(product);
+                stockBatchService.restoreStock(product, item.getQuantity());
 
                 StockMovement movement = StockMovement.builder()
                         .product(product)

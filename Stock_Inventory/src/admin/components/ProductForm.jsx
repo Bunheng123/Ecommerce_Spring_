@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { ConfirmDialog } from '../utils/swalConfig';
+import { fetchProductBatches } from '../../api/products';
 
 export default function ProductForm({
   mode = 'create',
@@ -32,6 +34,8 @@ export default function ProductForm({
   const [primaryFile, setPrimaryFile] = useState(null);
   const [primaryPreview, setPrimaryPreview] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [batches, setBatches] = useState([]);
+  const [batchesLoading, setBatchesLoading] = useState(false);
   const fileRef = useRef(null);
   const galleryRef = useRef(null);
 
@@ -64,6 +68,18 @@ export default function ProductForm({
       setPrimaryFile(null);
     }
   }, [initialData, isEdit, isView, categories]);
+
+  useEffect(() => {
+    if (initialData?.id && (isEdit || isView)) {
+      setBatchesLoading(true);
+      fetchProductBatches(initialData.id)
+        .then((data) => setBatches(Array.isArray(data) ? data : []))
+        .catch(() => setBatches([]))
+        .finally(() => setBatchesLoading(false));
+    } else {
+      setBatches([]);
+    }
+  }, [initialData?.id, isEdit, isView]);
 
   const handlePrimaryFile = (event) => {
     const file = event.target.files?.[0];
@@ -110,9 +126,41 @@ export default function ProductForm({
     }
   };
 
-  const handleSubmit = (event) => {
+  // Price vs Cost margin check
+  const priceNum = parseFloat(formData.price) || 0;
+  const costPriceNum = parseFloat(formData.costPrice) || 0;
+  const fifoUnitCostNum = parseFloat(initialData?.activeFifoUnitCost) || 0;
+  const benchmarkCost = Math.max(costPriceNum, fifoUnitCostNum);
+  const isBelowCost = priceNum > 0 && benchmarkCost > 0 && priceNum < benchmarkCost;
+  const unitLoss = (benchmarkCost - priceNum).toFixed(2);
+
+  // Batch ledger statistics
+  const totalBatches = batches.length;
+  const activeBatches = batches.filter((b) => b.status === 'ACTIVE' && b.remainingQuantity > 0).length;
+  const exhaustedBatches = batches.filter((b) => b.remainingQuantity === 0 || b.status === 'EXHAUSTED').length;
+  const nextFifoBatch = batches.find((b) => b.nextFifo);
+  const nextFifoCost = nextFifoBatch
+    ? `$${Number(nextFifoBatch.unitCost || 0).toFixed(2)}`
+    : batches.find((b) => b.status === 'ACTIVE')?.unitCost != null
+    ? `$${Number(batches.find((b) => b.status === 'ACTIVE').unitCost).toFixed(2)}`
+    : '—';
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
     if (isView) return;
+
+    if (isBelowCost) {
+      const result = await ConfirmDialog.fire({
+        title: 'Sell Below Cost Price?',
+        text: `Retail selling price ($${priceNum.toFixed(2)}) is below cost price ($${benchmarkCost.toFixed(2)}). Selling at this price results in a loss of $${unitLoss} per unit. Do you want to save this product anyway?`,
+        confirmButtonText: 'Yes, Save Anyway',
+        cancelButtonText: 'Cancel & Review',
+      });
+      if (!result.isConfirmed) {
+        return;
+      }
+    }
+
     onSubmit?.({
       ...formData,
       file: primaryFile,
@@ -219,6 +267,15 @@ export default function ProductForm({
               <label className="block text-[10px] font-black uppercase tracking-wider text-neutral-700 mb-1">Cost Price</label>
               <input type="number" min="0" step="0.01" disabled={isView} value={formData.costPrice} onChange={(event) => setFormData({ ...formData, costPrice: event.target.value })} className={inputClass(isView)} />
             </div>
+
+            {isBelowCost && (
+              <div className="md:col-span-2 p-3 bg-neutral-100 border border-neutral-900 rounded-xl flex items-start gap-2.5 shadow-xs">
+                <span className="text-xs font-black text-neutral-900 mt-0.5">⚠</span>
+                <div className="text-[11px] font-bold text-neutral-900">
+                  <span>Warning: Retail selling price (${priceNum.toFixed(2)}) is below product cost price (${benchmarkCost.toFixed(2)}). Selling at this price results in a loss of ${unitLoss} per unit.</span>
+                </div>
+              </div>
+            )}
             <div>
               <div className="flex items-center justify-between gap-2 mb-1">
                 <label className="block text-[10px] font-black uppercase tracking-wider text-neutral-700">Stock</label>
@@ -370,6 +427,122 @@ export default function ProductForm({
                   )}
                 </>
               )}
+            </div>
+          </div>
+        )}
+
+        {(isEdit || isView) && initialData?.id && (
+          <div className="border-t border-neutral-100 pt-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-400 block mb-0.5">
+                  AUDIT & DEPLETION LEDGER
+                </span>
+                <h4 className="text-xs font-black uppercase tracking-wider text-neutral-900">
+                  FIFO Inventory Batches {batches.length > 0 && <span className="text-neutral-400 font-bold">({batches.length})</span>}
+                </h4>
+              </div>
+              <span className="text-[10px] font-bold text-neutral-400">
+                Oldest active batches are depleted first
+              </span>
+            </div>
+
+            {/* Summary KPI Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-[#FAFBFD] border border-neutral-200/80 rounded-xl p-3 shadow-surface">
+                <span className="text-[9px] font-black uppercase tracking-wider text-neutral-400 block mb-1">Total Batches</span>
+                <span className="text-base font-black font-mono text-neutral-900">{totalBatches}</span>
+              </div>
+              <div className="bg-[#FAFBFD] border border-neutral-200/80 rounded-xl p-3 shadow-surface">
+                <span className="text-[9px] font-black uppercase tracking-wider text-neutral-400 block mb-1">Active Batches</span>
+                <span className="text-base font-black font-mono text-neutral-900">{activeBatches}</span>
+              </div>
+              <div className="bg-[#FAFBFD] border border-neutral-200/80 rounded-xl p-3 shadow-surface">
+                <span className="text-[9px] font-black uppercase tracking-wider text-neutral-400 block mb-1">Exhausted Batches</span>
+                <span className="text-base font-black font-mono text-neutral-900">{exhaustedBatches}</span>
+              </div>
+              <div className="bg-[#FAFBFD] border border-neutral-200/80 rounded-xl p-3 shadow-surface">
+                <span className="text-[9px] font-black uppercase tracking-wider text-neutral-400 block mb-1">Next FIFO Batch Cost</span>
+                <span className="text-base font-black font-mono text-neutral-900">{nextFifoCost}</span>
+              </div>
+            </div>
+
+            {/* Batches Table */}
+            <div className="border border-neutral-200/80 rounded-xl overflow-hidden bg-white shadow-surface">
+              <div className="overflow-x-auto max-h-[35vh]">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-[#FAFBFD] sticky top-0 z-1 border-b border-neutral-200/80 text-[10px] font-black uppercase tracking-wider text-neutral-500">
+                    <tr>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Batch #</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Source</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Received Date</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap text-right">Unit Cost</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap text-right">Initial Qty</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap text-right">Remaining Qty</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100 font-medium">
+                    {batchesLoading ? (
+                      <tr>
+                        <td colSpan={7} className="py-6 text-center text-neutral-400 font-bold uppercase">
+                          Loading batch ledger...
+                        </td>
+                      </tr>
+                    ) : batches.length > 0 ? (
+                      batches.map((batch) => {
+                        const isExhausted = batch.remainingQuantity === 0 || batch.status === 'EXHAUSTED';
+                        return (
+                          <tr key={batch.id} className="hover:bg-neutral-50/70 transition-colors">
+                            <td className="py-2.5 px-3 font-mono font-bold text-neutral-900 whitespace-nowrap">
+                              {batch.batchNumber}
+                            </td>
+                            <td className="py-2.5 px-3 text-neutral-700 whitespace-nowrap">
+                              {batch.source}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-neutral-500 whitespace-nowrap">
+                              {batch.receivedDate ? new Date(batch.receivedDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-right text-neutral-900 font-bold whitespace-nowrap">
+                              ${Number(batch.unitCost || 0).toFixed(2)}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-right text-neutral-600 whitespace-nowrap">
+                              {batch.initialQuantity}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-right text-neutral-900 font-black whitespace-nowrap">
+                              {batch.remainingQuantity}
+                            </td>
+                            <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1">
+                                {isExhausted ? (
+                                  <span className="border border-neutral-300 text-neutral-400 bg-neutral-100 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
+                                    EXHAUSTED
+                                  </span>
+                                ) : (
+                                  <span className="border border-neutral-900 text-neutral-900 bg-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
+                                    ACTIVE
+                                  </span>
+                                )}
+                                {batch.nextFifo && (
+                                  <span className="border border-neutral-900 bg-neutral-900 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
+                                    NEXT OUT (FIFO)
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="py-6 text-center text-neutral-400 font-bold uppercase">
+                          No batches recorded for this product yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

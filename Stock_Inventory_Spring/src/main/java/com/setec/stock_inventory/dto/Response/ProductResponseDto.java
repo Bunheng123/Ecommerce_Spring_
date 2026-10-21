@@ -30,4 +30,7 @@ public class ProductResponseDto {
     private String categoryName;
     private java.util.List<String> galleryImageUrls;
     private boolean comingSoon;
+    private boolean belowCostPrice;
+    private java.math.BigDecimal activeFifoUnitCost;
+    private String priceWarning;
 }

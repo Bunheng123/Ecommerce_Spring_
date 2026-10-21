@@ -55,4 +55,6 @@ public interface ProductService {
             int page,
             int size
     );
+
+    List<com.setec.stock_inventory.dto.Response.StockBatchResponseDto> getProductBatches(Long productId);
 }

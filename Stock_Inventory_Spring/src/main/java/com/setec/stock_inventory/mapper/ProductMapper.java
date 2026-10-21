@@ -23,6 +23,19 @@ public class ProductMapper {
         Long brandId = product.getBrand() != null ? product.getBrand().getId() : null;
         String brandName = product.getBrand() != null ? product.getBrand().getName() : null;
 
+        java.math.BigDecimal sellingPrice = product.getPrice() >= 0
+                ? java.math.BigDecimal.valueOf(product.getPrice()).setScale(2, java.math.RoundingMode.HALF_UP)
+                : null;
+        java.math.BigDecimal catalogCost = product.getCostPrice() != null
+                ? java.math.BigDecimal.valueOf(product.getCostPrice()).setScale(2, java.math.RoundingMode.HALF_UP)
+                : null;
+
+        boolean isBelowCost = sellingPrice != null && catalogCost != null && sellingPrice.compareTo(catalogCost) < 0;
+        String warning = (isBelowCost && catalogCost != null && sellingPrice != null)
+                ? String.format("Warning: Selling price ($%.2f) is below cost price ($%.2f) — loss of $%.2f per unit",
+                        sellingPrice, catalogCost, catalogCost.subtract(sellingPrice).setScale(2, java.math.RoundingMode.HALF_UP))
+                : null;
+
         return ProductResponseDto.builder()
                 .id(product.getId())
                 .name(product.getName())
@@ -41,6 +54,9 @@ public class ProductMapper {
                 .categoryId(product.getCategory() != null ? product.getCategory().getId() : null)
                 .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
                 .galleryImageUrls(galleryUrls)
+                .belowCostPrice(isBelowCost)
+                .activeFifoUnitCost(catalogCost)
+                .priceWarning(warning)
                 .build();
     }
 

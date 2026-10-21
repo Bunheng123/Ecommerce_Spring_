@@ -44,6 +44,7 @@ public class WholesaleOrderServiceImpl implements WholesaleOrderService {
     private final UserRepository userRepository;
     private final StockMovementRepository stockMovementRepository;
     private final EmailService emailService;
+    private final com.setec.stock_inventory.service.StockBatchService stockBatchService;
 
     @Override
     @Transactional
@@ -158,6 +159,7 @@ public class WholesaleOrderServiceImpl implements WholesaleOrderService {
             int newStock = previousStock - item.getQuantity();
             product.setStock(newStock);
             Product savedProduct = productRepository.save(product);
+            stockBatchService.depleteStockFifo(savedProduct, item.getQuantity());
 
             if (newStock <= savedProduct.getReorderLevel()) {
                 String brandName = savedProduct.getBrand() != null ? savedProduct.getBrand().getName() : "N/A";

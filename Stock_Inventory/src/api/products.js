@@ -112,6 +112,12 @@ export async function fetchProductImages(productId) {
   return Array.isArray(data) ? data : [];
 }
 
+export async function fetchProductBatches(productId) {
+  const response = await apiClient.get(`/products/${productId}/batches`);
+  const data = unwrap(response);
+  return Array.isArray(data) ? data : [];
+}
+
 export async function addProductImage(productId, file) {
   const formData = new FormData();
   formData.append('file', file);

@@ -104,6 +104,14 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success("Stock reduced successfully", response));
     }
 
+    @GetMapping("/{id}/batches")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STOCK')")
+    public ResponseEntity<ApiResponse<List<com.setec.stock_inventory.dto.Response.StockBatchResponseDto>>> getProductBatches(
+            @PathVariable Long id) {
+        List<com.setec.stock_inventory.dto.Response.StockBatchResponseDto> batches = productService.getProductBatches(id);
+        return ResponseEntity.ok(ApiResponse.success("Product batches retrieved successfully", batches));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ProductResponseDto>> getProductById(@PathVariable Long id) {
         ProductResponseDto response = productService.getProductById(id);

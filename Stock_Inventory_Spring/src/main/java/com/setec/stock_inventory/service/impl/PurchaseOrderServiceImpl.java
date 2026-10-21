@@ -39,6 +39,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final com.setec.stock_inventory.service.StockBatchService stockBatchService;
 
     @Override
     @Transactional
@@ -131,7 +132,18 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             int previousStock = product.getStock();
             int newStock = previousStock + item.getQuantity();
             product.setStock(newStock);
+            product.setCostPrice(item.getCostPrice());
             productRepository.save(product);
+
+            // Record FIFO Stock Batch
+            stockBatchService.createBatch(
+                    product,
+                    order,
+                    java.math.BigDecimal.valueOf(item.getCostPrice()),
+                    item.getQuantity(),
+                    java.time.LocalDateTime.now(),
+                    null
+            );
 
             StockMovement movement = StockMovement.builder()
                     .product(product)

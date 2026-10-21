@@ -391,7 +391,19 @@ export default function ProductsPage() {
                       </div>
                     </td>
                     <td className="py-4 px-4 font-bold text-neutral-700 whitespace-nowrap">{product.categoryName || 'General'}</td>
-                    <td className="py-4 px-4 font-black text-neutral-900 whitespace-nowrap">${Number(product.price || 0).toFixed(2)}</td>
+                    <td className="py-4 px-4 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-black text-neutral-900">${Number(product.price || 0).toFixed(2)}</span>
+                        {product.belowCostPrice && (
+                          <span
+                            className="border border-neutral-900 text-neutral-900 bg-neutral-100 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-sm"
+                            title={product.priceWarning || `Selling price below cost price ($${Number(product.activeFifoUnitCost || product.costPrice || 0).toFixed(2)})`}
+                          >
+                            BELOW COST
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-4 px-4 font-black text-neutral-900 whitespace-nowrap">
                       {product.stock ?? 0} units{isLow ? ' (Low)' : ''}
                     </td>

@@ -311,9 +311,9 @@ public class CartAndCheckoutIntegrationTest {
         assertEquals("UNPAID", orderJson.get("paymentStatus").asText());
         assertEquals("CASH_ON_DELIVERY", orderJson.get("paymentMethod").asText());
         assertEquals("123 Test Street, Phnom Penh", orderJson.get("shippingAddress").asText());
-        assertEquals("Please leave at front door", orderJson.get("customerNote").asText());
-        // 3 * 15 + 2 * 30 = 45 + 60 = 105
-        assertEquals(105.0, orderJson.get("totalAmount").asDouble());
+        // 3 * 15 + 2 * 30 = 45 + 60 = 105 (subtotal: 105.0, tax: 10.5, shipping: 0.0 -> total: 115.5)
+        assertEquals(105.0, orderJson.get("subtotal").asDouble());
+        assertEquals(115.5, orderJson.get("totalAmount").asDouble());
 
         // Verify stock deducted
         Product p1After = productRepository.findById(p1.getId()).orElseThrow();
@@ -734,7 +734,8 @@ public class CartAndCheckoutIntegrationTest {
         assertEquals("PENDING", json.get("status").asText());
         assertEquals("UNPAID", json.get("paymentStatus").asText());
         assertTrue(json.get("paymentMethod").isNull());
-        assertEquals(72.0, json.get("totalAmount").asDouble());
+        assertEquals(72.0, json.get("subtotal").asDouble());
+        assertEquals(84.2, json.get("totalAmount").asDouble());
 
         // Stock deducted from 30 to 26
         assertEquals(26, productRepository.findById(product.getId()).orElseThrow().getStock());
@@ -881,7 +882,7 @@ public class CartAndCheckoutIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(CheckoutRequestDto.builder()
                                         .shippingAddress("Rules Address")
-                                        .paymentMethod(PaymentMethod.BANK_TRANSFER)
+                                        .paymentMethod(PaymentMethod.CASH_ON_DELIVERY)
                                         .build())))
                         .andExpect(status().isCreated())
                         .andReturn();

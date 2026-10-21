@@ -16,4 +16,6 @@ public class WholesaleOrderItemResponseDto {
     private int quantity;
     private double wholesalePrice;
     private double subtotal;
+    private boolean belowCostPrice;
+    private java.math.BigDecimal productCostPrice;
 }

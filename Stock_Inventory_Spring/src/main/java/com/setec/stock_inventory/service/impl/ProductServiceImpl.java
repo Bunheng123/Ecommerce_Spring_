@@ -39,6 +39,8 @@ import org.springframework.data.jpa.domain.Specification;
 import com.setec.stock_inventory.dto.Response.PageResponseDto;
 import com.setec.stock_inventory.specification.ProductSpecification;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 import java.time.LocalDateTime;
@@ -59,20 +61,57 @@ public class ProductServiceImpl implements ProductService {
     private final com.setec.stock_inventory.repo.OrderItemRepository orderItemRepository;
     private final com.setec.stock_inventory.repo.PurchaseOrderRepository purchaseOrderRepository;
     private final EmailService emailService;
+    private final com.setec.stock_inventory.service.StockBatchService stockBatchService;
+    private final com.setec.stock_inventory.repo.StockBatchRepository stockBatchRepository;
 
-    private ProductResponseDto mapToResponseWithComingSoon(Product product, java.util.Set<Long> pendingProductIds) {
+    private void enrichBelowCostWarning(ProductResponseDto dto, BigDecimal activeCost) {
+        if (dto == null) return;
+        BigDecimal activeFifoCost = activeCost != null
+                ? activeCost
+                : (dto.getCostPrice() != null ? BigDecimal.valueOf(dto.getCostPrice()).setScale(2, RoundingMode.HALF_UP) : null);
+
+        dto.setActiveFifoUnitCost(activeFifoCost);
+
+        BigDecimal sellingPrice = dto.getPrice() != null ? BigDecimal.valueOf(dto.getPrice()).setScale(2, RoundingMode.HALF_UP) : null;
+        BigDecimal catalogCost = dto.getCostPrice() != null ? BigDecimal.valueOf(dto.getCostPrice()).setScale(2, RoundingMode.HALF_UP) : null;
+
+        BigDecimal benchmarkCost = null;
+        if (activeFifoCost != null && catalogCost != null) {
+            benchmarkCost = activeFifoCost.max(catalogCost);
+        } else if (activeFifoCost != null) {
+            benchmarkCost = activeFifoCost;
+        } else if (catalogCost != null) {
+            benchmarkCost = catalogCost;
+        }
+
+        if (sellingPrice != null && benchmarkCost != null && sellingPrice.compareTo(benchmarkCost) < 0) {
+            dto.setBelowCostPrice(true);
+            BigDecimal loss = benchmarkCost.subtract(sellingPrice).setScale(2, RoundingMode.HALF_UP);
+            dto.setPriceWarning(String.format("Warning: Selling price ($%.2f) is below cost price ($%.2f) — loss of $%.2f per unit",
+                    sellingPrice, benchmarkCost, loss));
+        } else {
+            dto.setBelowCostPrice(false);
+            dto.setPriceWarning(null);
+        }
+    }
+
+    private ProductResponseDto mapToResponseWithComingSoon(Product product, java.util.Set<Long> pendingProductIds, Map<Long, BigDecimal> activeCostMap) {
         ProductResponseDto dto = ProductMapper.toResponse(product);
         if (dto != null) {
             boolean comingSoon = dto.getStock() <= 0 && pendingProductIds != null && pendingProductIds.contains(dto.getId());
             dto.setComingSoon(comingSoon);
+            BigDecimal activeCost = activeCostMap != null ? activeCostMap.get(dto.getId()) : null;
+            enrichBelowCostWarning(dto, activeCost);
         }
         return dto;
     }
 
-    private ProductResponseDto enrichComingSoon(ProductResponseDto dto) {
+    private ProductResponseDto enrichMetadata(ProductResponseDto dto) {
         if (dto != null) {
             boolean comingSoon = dto.getStock() <= 0 && purchaseOrderRepository.isProductInPendingPurchaseOrder(dto.getId());
             dto.setComingSoon(comingSoon);
+            BigDecimal activeCost = stockBatchService.getActiveFifoUnitCost(dto.getId());
+            enrichBelowCostWarning(dto, activeCost);
         }
         return dto;
     }
@@ -106,22 +145,30 @@ public class ProductServiceImpl implements ProductService {
         product.setPublicId(publicId);
 
         Product saved = productRepository.save(product);
-        return enrichComingSoon(ProductMapper.toResponse(saved));
+        if (saved.getStock() > 0) {
+            BigDecimal unitCost = saved.getCostPrice() != null
+                    ? BigDecimal.valueOf(saved.getCostPrice())
+                    : (saved.getPrice() > 0 ? BigDecimal.valueOf(saved.getPrice()) : BigDecimal.ZERO);
+            stockBatchService.createBatch(saved, null, unitCost, saved.getStock(), LocalDateTime.now(), null);
+        }
+        return enrichMetadata(ProductMapper.toResponse(saved));
     }
 
     @Override
     public List<ProductResponseDto> getAllProducts() {
         java.util.Set<Long> pendingProductIds = purchaseOrderRepository.findProductIdsInPendingPurchaseOrders();
+        Map<Long, BigDecimal> activeCosts = stockBatchService.getAllActiveFifoUnitCosts();
         return productRepository.findAllWithDetails().stream()
-                .map(p -> mapToResponseWithComingSoon(p, pendingProductIds))
+                .map(p -> mapToResponseWithComingSoon(p, pendingProductIds, activeCosts))
                 .toList();
     }
 
     @Override
     public List<ProductResponseDto> getAllProductsForAdmin() {
         java.util.Set<Long> pendingProductIds = purchaseOrderRepository.findProductIdsInPendingPurchaseOrders();
+        Map<Long, BigDecimal> activeCosts = stockBatchService.getAllActiveFifoUnitCosts();
         return productRepository.findAllIncludingInactiveWithDetails().stream()
-                .map(p -> mapToResponseWithComingSoon(p, pendingProductIds))
+                .map(p -> mapToResponseWithComingSoon(p, pendingProductIds, activeCosts))
                 .toList();
     }
 
@@ -130,7 +177,7 @@ public class ProductServiceImpl implements ProductService {
         Product product = productRepository.findById(id).orElseThrow(
                 () -> new ResourceNotFoundException("Product not found with id " + id)
         );
-        ProductResponseDto response = enrichComingSoon(ProductMapper.toResponse(product));
+        ProductResponseDto response = enrichMetadata(ProductMapper.toResponse(product));
         List<ProductImage> galleryImages = productImageRepository.findByProductId(id);
         response.setGalleryImageUrls(galleryImages.stream().map(ProductImage::getImageUrl).toList());
         return response;
@@ -142,8 +189,9 @@ public class ProductServiceImpl implements ProductService {
             throw new ResourceNotFoundException("Category not found with id " + categoryId);
         }
         java.util.Set<Long> pendingProductIds = purchaseOrderRepository.findProductIdsInPendingPurchaseOrders();
+        Map<Long, BigDecimal> activeCosts = stockBatchService.getAllActiveFifoUnitCosts();
         return productRepository.findByCategoryIdAndActiveTrue(categoryId).stream()
-                .map(p -> mapToResponseWithComingSoon(p, pendingProductIds))
+                .map(p -> mapToResponseWithComingSoon(p, pendingProductIds, activeCosts))
                 .toList();
     }
 
@@ -187,7 +235,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Product updated = productRepository.save(product);
-        return enrichComingSoon(ProductMapper.toResponse(updated));
+        return enrichMetadata(ProductMapper.toResponse(updated));
     }
 
     @Override
@@ -223,14 +271,16 @@ public class ProductServiceImpl implements ProductService {
         orderItemRepository.deleteByProductId(id);
         stockMovementRepository.deleteByProductId(id);
         productImageRepository.deleteByProductId(id);
+        stockBatchRepository.deleteByProductId(id);
         productRepository.delete(product);
     }
 
     @Override
     public List<ProductResponseDto> getLowStockProducts() {
         java.util.Set<Long> pendingProductIds = purchaseOrderRepository.findProductIdsInPendingPurchaseOrders();
+        Map<Long, BigDecimal> activeCosts = stockBatchService.getAllActiveFifoUnitCosts();
         return productRepository.findLowStockProducts().stream()
-                .map(p -> mapToResponseWithComingSoon(p, pendingProductIds))
+                .map(p -> mapToResponseWithComingSoon(p, pendingProductIds, activeCosts))
                 .toList();
     }
 
@@ -262,6 +312,15 @@ public class ProductServiceImpl implements ProductService {
 
         product.setStock(newStock);
         Product updated = productRepository.save(product);
+
+        if (request.getQuantity() > 0) {
+            BigDecimal unitCost = updated.getCostPrice() != null
+                    ? BigDecimal.valueOf(updated.getCostPrice())
+                    : BigDecimal.ZERO;
+            stockBatchService.createBatch(updated, null, unitCost, request.getQuantity(), LocalDateTime.now(), null);
+        } else if (request.getQuantity() < 0) {
+            stockBatchService.depleteStockFifo(updated, Math.abs(request.getQuantity()));
+        }
 
         User currentUser = getCurrentAuthenticatedUser();
 
@@ -297,7 +356,7 @@ public class ProductServiceImpl implements ProductService {
             }
         }
 
-        return enrichComingSoon(ProductMapper.toResponse(updated));
+        return enrichMetadata(ProductMapper.toResponse(updated));
     }
 
     @Override
@@ -317,6 +376,11 @@ public class ProductServiceImpl implements ProductService {
         product.setStock(newStock);
         Product updated = productRepository.save(product);
 
+        BigDecimal unitCost = updated.getCostPrice() != null
+                ? BigDecimal.valueOf(updated.getCostPrice())
+                : BigDecimal.ZERO;
+        stockBatchService.createBatch(updated, null, unitCost, request.getQuantity(), LocalDateTime.now(), null);
+
         User currentUser = getCurrentAuthenticatedUser();
 
         StockMovement movement = StockMovement.builder()
@@ -331,7 +395,7 @@ public class ProductServiceImpl implements ProductService {
 
         stockMovementRepository.save(movement);
 
-        return enrichComingSoon(ProductMapper.toResponse(updated));
+        return enrichMetadata(ProductMapper.toResponse(updated));
     }
 
     @Override
@@ -354,6 +418,8 @@ public class ProductServiceImpl implements ProductService {
         int newStock = previousStock - request.getQuantity();
         product.setStock(newStock);
         Product updated = productRepository.save(product);
+
+        stockBatchService.depleteStockFifo(updated, request.getQuantity());
 
         User currentUser = getCurrentAuthenticatedUser();
 
@@ -389,7 +455,7 @@ public class ProductServiceImpl implements ProductService {
             }
         }
 
-        return enrichComingSoon(ProductMapper.toResponse(updated));
+        return enrichMetadata(ProductMapper.toResponse(updated));
     }
 
     @Override
@@ -484,8 +550,14 @@ public class ProductServiceImpl implements ProductService {
         Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, size), sortObj);
         Page<Product> productPage = productRepository.findAll(spec, pageable);
 
-        Page<ProductResponseDto> dtoPage = productPage.map(p -> mapToResponseWithComingSoon(p, pendingProductIds));
+        Map<Long, BigDecimal> activeCosts = stockBatchService.getAllActiveFifoUnitCosts();
+        Page<ProductResponseDto> dtoPage = productPage.map(p -> mapToResponseWithComingSoon(p, pendingProductIds, activeCosts));
         return PageResponseDto.from(dtoPage);
+    }
+
+    @Override
+    public List<com.setec.stock_inventory.dto.Response.StockBatchResponseDto> getProductBatches(Long productId) {
+        return stockBatchService.getProductBatches(productId);
     }
 
     private User getCurrentAuthenticatedUser() {
