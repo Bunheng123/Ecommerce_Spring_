@@ -15,7 +15,7 @@ public interface StockBatchService {
 
     StockBatch createBatch(Product product, PurchaseOrder purchaseOrder, BigDecimal unitCost, int quantity, LocalDateTime receivedDate, LocalDate expiryDate);
 
-    void depleteStockFifo(Product product, int quantityToDeplete);
+    BigDecimal depleteStockFifo(Product product, int quantityToDeplete);
 
     void restoreStock(Product product, int quantityToRestore);
 

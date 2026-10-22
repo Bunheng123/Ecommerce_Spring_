@@ -30,6 +30,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -159,7 +161,12 @@ public class WholesaleOrderServiceImpl implements WholesaleOrderService {
             int newStock = previousStock - item.getQuantity();
             product.setStock(newStock);
             Product savedProduct = productRepository.save(product);
-            stockBatchService.depleteStockFifo(savedProduct, item.getQuantity());
+            BigDecimal itemCogs = stockBatchService.depleteStockFifo(savedProduct, item.getQuantity());
+            BigDecimal itemUnitCost = item.getQuantity() > 0
+                    ? itemCogs.divide(BigDecimal.valueOf(item.getQuantity()), 2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+            item.setTotalCogs(itemCogs);
+            item.setUnitCost(itemUnitCost);
 
             if (newStock <= savedProduct.getReorderLevel()) {
                 String brandName = savedProduct.getBrand() != null ? savedProduct.getBrand().getName() : "N/A";

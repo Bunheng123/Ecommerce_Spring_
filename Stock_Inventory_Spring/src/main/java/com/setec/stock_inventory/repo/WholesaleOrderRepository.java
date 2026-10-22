@@ -38,4 +38,14 @@ public interface WholesaleOrderRepository extends JpaRepository<WholesaleOrder, 
            "WHERE w.buyer.id = :buyerId " +
            "ORDER BY w.orderDate DESC")
     List<WholesaleOrder> findByBuyerIdWithDetails(@Param("buyerId") Long buyerId);
+
+    @Query("SELECT DISTINCT w FROM WholesaleOrder w " +
+           "LEFT JOIN FETCH w.items i " +
+           "LEFT JOIN FETCH i.product p " +
+           "LEFT JOIN FETCH p.category " +
+           "LEFT JOIN FETCH p.brand " +
+           "LEFT JOIN FETCH w.buyer " +
+           "WHERE w.status = com.setec.stock_inventory.enums.WholesaleOrderStatus.COMPLETED " +
+           "ORDER BY w.orderDate ASC")
+    List<WholesaleOrder> findCompletedWithDetails();
 }

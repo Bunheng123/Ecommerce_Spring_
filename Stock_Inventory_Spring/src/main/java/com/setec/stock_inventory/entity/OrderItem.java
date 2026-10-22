@@ -32,5 +32,11 @@ public class OrderItem {
     @JoinColumn(name = "product_id",nullable = false)
     private Product product;
 
+    @Column(name = "unit_cost", precision = 12, scale = 2)
+    private java.math.BigDecimal unitCost;
+
+    @Column(name = "total_cogs", precision = 12, scale = 2)
+    private java.math.BigDecimal totalCogs;
+
 
 }

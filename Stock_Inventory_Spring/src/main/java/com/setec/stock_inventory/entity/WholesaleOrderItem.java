@@ -33,4 +33,10 @@ public class WholesaleOrderItem {
 
     @Column(name = "wholesale_price", nullable = false)
     private double wholesalePrice;
+
+    @Column(name = "unit_cost", precision = 12, scale = 2)
+    private java.math.BigDecimal unitCost;
+
+    @Column(name = "total_cogs", precision = 12, scale = 2)
+    private java.math.BigDecimal totalCogs;
 }

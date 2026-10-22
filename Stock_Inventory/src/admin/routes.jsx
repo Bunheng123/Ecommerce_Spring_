@@ -10,10 +10,12 @@ import WholesaleBuyersPage from './pages/WholesaleBuyersPage';
 import WholesaleOrdersPage from './pages/WholesaleOrdersPage';
 import StockMovementsPage from './pages/StockMovementsPage';
 import LowStockPage from './pages/LowStockPage';
+import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
 
 const adminRoutes = [
   { path: '', element: <DashboardPage /> },
+  { path: 'reports', element: <ReportsPage /> },
   { path: 'users', element: <UsersPage /> },
   { path: 'orders', element: <OrdersPage /> },
   { path: 'products', element: <ProductsPage /> },

@@ -42,5 +42,18 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByUserIdWithDetails(Long userId);
 
     List<Order> findByStatusIgnoreCase(String status);
+
+    @Query("""
+        SELECT DISTINCT o
+        FROM Order o
+        LEFT JOIN FETCH o.user
+        LEFT JOIN FETCH o.orderItems i
+        LEFT JOIN FETCH i.product p
+        LEFT JOIN FETCH p.category
+        LEFT JOIN FETCH p.brand
+        WHERE UPPER(o.status) = 'COMPLETED'
+        ORDER BY o.orderDate ASC
+    """)
+    List<Order> findCompletedWithDetails();
 }
 

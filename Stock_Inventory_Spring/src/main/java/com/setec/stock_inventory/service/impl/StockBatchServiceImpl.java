@@ -88,10 +88,15 @@ public class StockBatchServiceImpl implements StockBatchService {
 
     @Override
     @Transactional
-    public void depleteStockFifo(Product product, int quantityToDeplete) {
+    public BigDecimal depleteStockFifo(Product product, int quantityToDeplete) {
         if (product == null || quantityToDeplete <= 0) {
-            return;
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
+
+        BigDecimal totalCogs = BigDecimal.ZERO;
+        BigDecimal fallbackUnitCost = product.getCostPrice() != null
+                ? BigDecimal.valueOf(product.getCostPrice())
+                : BigDecimal.ZERO;
 
         List<StockBatch> activeBatches = stockBatchRepository
                 .findByProductIdAndRemainingQuantityGreaterThanOrderByReceivedDateAscIdAsc(product.getId(), 0);
@@ -101,13 +106,16 @@ public class StockBatchServiceImpl implements StockBatchService {
             if (remainingToDeplete <= 0) {
                 break;
             }
+            BigDecimal batchCost = batch.getUnitCost() != null ? batch.getUnitCost() : fallbackUnitCost;
             int available = batch.getRemainingQuantity();
             if (available <= remainingToDeplete) {
+                totalCogs = totalCogs.add(batchCost.multiply(BigDecimal.valueOf(available)));
                 batch.setRemainingQuantity(0);
                 batch.setStatus(BatchStatus.EXHAUSTED);
                 remainingToDeplete -= available;
                 log.info("Depleted batch #{} completely to 0 (EXHAUSTED). Still needed: {}", batch.getBatchNumber(), remainingToDeplete);
             } else {
+                totalCogs = totalCogs.add(batchCost.multiply(BigDecimal.valueOf(remainingToDeplete)));
                 batch.setRemainingQuantity(available - remainingToDeplete);
                 remainingToDeplete = 0;
                 log.info("Partially depleted batch #{}. Remaining quantity: {}", batch.getBatchNumber(), batch.getRemainingQuantity());
@@ -116,9 +124,12 @@ public class StockBatchServiceImpl implements StockBatchService {
         }
 
         if (remainingToDeplete > 0) {
-            log.warn("Depleted all active batches for Product #{}, but still had deficit of {} units.",
-                    product.getId(), remainingToDeplete);
+            totalCogs = totalCogs.add(fallbackUnitCost.multiply(BigDecimal.valueOf(remainingToDeplete)));
+            log.warn("Depleted all active batches for Product #{}, but still had deficit of {} units. Applied fallback unit cost: {}",
+                    product.getId(), remainingToDeplete, fallbackUnitCost);
         }
+
+        return totalCogs.setScale(2, RoundingMode.HALF_UP);
     }
 
     @Override

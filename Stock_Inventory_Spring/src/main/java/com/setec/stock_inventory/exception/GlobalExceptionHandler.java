@@ -85,6 +85,16 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Object>> handleNoResourceFoundException(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex
+    ) {
+        return new ResponseEntity<>(
+                ApiResponse.error("Endpoint not found: " + ex.getResourcePath()),
+                HttpStatus.NOT_FOUND
+        );
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleGeneralException(Exception ex) {
         return new ResponseEntity<>(

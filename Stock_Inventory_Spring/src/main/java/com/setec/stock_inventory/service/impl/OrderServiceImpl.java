@@ -455,7 +455,10 @@ public class OrderServiceImpl implements OrderService {
             int newStock = previousStock - input.quantity;
             product.setStock(newStock);
             Product savedProduct = productRepository.save(product);
-            stockBatchService.depleteStockFifo(savedProduct, input.quantity);
+            BigDecimal itemCogs = stockBatchService.depleteStockFifo(savedProduct, input.quantity);
+            BigDecimal itemUnitCost = input.quantity > 0
+                    ? itemCogs.divide(BigDecimal.valueOf(input.quantity), 2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
             if (newStock <= savedProduct.getReorderLevel()) {
                 String brandName = savedProduct.getBrand() != null ? savedProduct.getBrand().getName() : "N/A";
@@ -478,6 +481,8 @@ public class OrderServiceImpl implements OrderService {
             orderItem.setProduct(savedProduct);
             orderItem.setQuantity(input.quantity);
             orderItem.setPrice(input.price);
+            orderItem.setUnitCost(itemUnitCost);
+            orderItem.setTotalCogs(itemCogs);
             orderItem.setOrder(order);
 
             orderItems.add(orderItem);

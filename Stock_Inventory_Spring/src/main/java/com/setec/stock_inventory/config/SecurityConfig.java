@@ -129,9 +129,10 @@ public class SecurityConfig {
                         ).hasAnyRole("ADMIN", "STOCK")
                         // Wholesale Buyers: all methods allowed for ADMIN and STOCK only
                         .requestMatchers("/api/wholesale-buyers/**").hasAnyRole("ADMIN", "STOCK")
-                        // Wholesale Orders: all methods allo
-                        // wed for ADMIN and STOCK only
+                        // Wholesale Orders: all methods allowed for ADMIN and STOCK only
                         .requestMatchers("/api/wholesale-orders/**").hasAnyRole("ADMIN", "STOCK")
+                        // Reports & Profit Analytics: ADMIN only
+                        .requestMatchers("/api/reports/**").hasRole("ADMIN")
                         // Any authenticated user can manage their own profile
                         .requestMatchers("/api/users/me", "/api/users/me/**").authenticated()
                         // Managing all other users (creating, listing, deleting) remains ADMIN only

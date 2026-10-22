@@ -35,6 +35,24 @@ public class DataSeeder implements CommandLineRunner {
             jdbcTemplate.execute("UPDATE orders SET tax_amount = 0.00 WHERE tax_amount IS NULL;");
             jdbcTemplate.execute("UPDATE users SET email = 'hengheng514.514@gmail.com' WHERE email = 'hengheng513.513@gmail.com' AND user_name != 'admin';");
             jdbcTemplate.execute("UPDATE users SET email = 'hengheng513.513@gmail.com' WHERE user_name = 'admin';");
+            jdbcTemplate.execute("ALTER TABLE order_items ADD COLUMN IF NOT EXISTS unit_cost numeric(12,2);");
+            jdbcTemplate.execute("ALTER TABLE order_items ADD COLUMN IF NOT EXISTS total_cogs numeric(12,2);");
+            jdbcTemplate.execute("ALTER TABLE wholesale_order_items ADD COLUMN IF NOT EXISTS unit_cost numeric(12,2);");
+            jdbcTemplate.execute("ALTER TABLE wholesale_order_items ADD COLUMN IF NOT EXISTS total_cogs numeric(12,2);");
+            jdbcTemplate.execute("""
+                UPDATE order_items oi
+                SET unit_cost = ROUND(COALESCE(p.cost_price, 0)::numeric, 2),
+                    total_cogs = ROUND((COALESCE(p.cost_price, 0) * oi.quantity)::numeric, 2)
+                FROM products p
+                WHERE oi.product_id = p.id AND oi.total_cogs IS NULL;
+            """);
+            jdbcTemplate.execute("""
+                UPDATE wholesale_order_items woi
+                SET unit_cost = ROUND(COALESCE(p.cost_price, 0)::numeric, 2),
+                    total_cogs = ROUND((COALESCE(p.cost_price, 0) * woi.quantity)::numeric, 2)
+                FROM products p
+                WHERE woi.product_id = p.id AND woi.total_cogs IS NULL;
+            """);
         } catch (Exception e) {
             log.warn("Could not execute startup schema updates: {}", e.getMessage());
         }
