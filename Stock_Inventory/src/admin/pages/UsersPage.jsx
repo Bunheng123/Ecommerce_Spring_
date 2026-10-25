@@ -276,7 +276,7 @@ export default function UsersPage() {
   const paginatedUsers = filteredUsers.slice(startIndex, startIndex + PAGE_SIZE);
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-8">
+    <div className="space-y-8 animate-fadeIn pb-8">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -296,7 +296,7 @@ export default function UsersPage() {
           <button
             type="button"
             onClick={handleOpenCreate}
-            className="h-10 px-5 bg-neutral-900 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-neutral-800 transition-colors flex items-center gap-2 cursor-pointer shadow-sm active:scale-95"
+            className="h-12 px-6 rounded-2xl bg-neutral-950 text-white text-xs font-black uppercase tracking-wider hover:bg-neutral-800 transition-all flex items-center gap-2 shadow-sm active:scale-[0.99] shrink-0"
           >
             <span className="text-base leading-none">+</span>
             <span>Add User</span>

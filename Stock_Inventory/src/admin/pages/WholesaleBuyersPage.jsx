@@ -199,25 +199,25 @@ export default function WholesaleBuyersPage() {
   const indCount = totalCount - orgCount;
 
   return (
-    <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-8 animate-fadeIn">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-400 block mb-1">
+          <span className="text-[11px] font-black uppercase tracking-[0.16em] text-neutral-400 block mb-1">
             COMMERCIAL DISTRIBUTION
           </span>
-          <h1 className="text-2xl font-black uppercase tracking-tight text-neutral-900">
+          <h1 className="text-3xl font-black uppercase tracking-tight text-neutral-900">
             Wholesale Buyers
           </h1>
-          <p className="text-xs text-neutral-500 font-medium mt-0.5">
-            Manage volume institutional buyers, distribution networks, and partner accounts
+          <p className="text-xs font-bold text-neutral-500 mt-1">
+            Manage volume institutional buyers, distribution networks, and partner accounts.
           </p>
         </div>
 
         <button
           type="button"
           onClick={handleOpenCreate}
-          className="h-10 px-5 bg-neutral-900 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-neutral-800 transition-all cursor-pointer shadow-xs flex items-center justify-center gap-2 self-start sm:self-auto"
+          className="h-12 px-6 rounded-2xl bg-neutral-950 text-white text-xs font-black uppercase tracking-wider hover:bg-neutral-800 transition-all shadow-md shadow-neutral-900/10 flex items-center justify-center gap-2 self-start sm:self-auto cursor-pointer"
         >
           <span>+</span>
           <span>Add Wholesale Buyer</span>

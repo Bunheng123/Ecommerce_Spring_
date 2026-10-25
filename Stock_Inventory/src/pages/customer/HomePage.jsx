@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ProductCard, {
   ProductCardSkeleton,
 } from "../../components/customer/ProductCard";
 import { fetchProducts } from "../../api/products";
-import { PREVIEW_RECOMMENDATIONS } from "../../data/previewProducts";
 import { useCart } from "../../context/CartContext";
 
 // Helper to convert clean SVG markup to a data URI for fast, transparent rendering
@@ -278,18 +277,6 @@ function SectionHeader({ kicker, title, right }) {
   );
 }
 
-const Chevron = ({ flip }) => (
-  <svg
-    width="6"
-    height="10"
-    viewBox="0 0 6 10"
-    fill="none"
-    className={flip ? "rotate-180" : ""}
-    aria-hidden="true"
-  >
-    <path d="M1 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" />
-  </svg>
-);
 
 // Note: Synthetic CoatHanger and TrouserHanger were removed because the 4 real
 // cutout images (/hero-rail/*.png) already include their own high-res coat/trouser hangers and top hooks.
@@ -302,7 +289,6 @@ export default function HomePage() {
   const [query, setQuery] = useState("");
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
-  const track = useRef(null);
   const { addItem } = useCart();
 
   // Rail State
@@ -341,9 +327,6 @@ export default function HomePage() {
   }, []);
 
   const featured = products.slice(0, 8);
-  const recs = PREVIEW_RECOMMENDATIONS;
-  const scrollRecs = (dir) =>
-    track.current?.scrollBy({ left: dir * 310, behavior: "smooth" });
 
   const onSearch = (e) => {
     e.preventDefault();

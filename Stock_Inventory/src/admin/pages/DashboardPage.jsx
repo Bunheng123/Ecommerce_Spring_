@@ -33,6 +33,7 @@ export default function DashboardPage() {
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [reportData, setReportData] = useState(null);
+  const [overallSummary, setOverallSummary] = useState(null);
   const [chartView, setChartView] = useState('TIME'); // TIME, CATEGORY, BRAND
   const [loading, setLoading] = useState(true);
   const [reportLoading, setReportLoading] = useState(false);
@@ -94,13 +95,14 @@ export default function DashboardPage() {
   const loadDashboardData = async (showLoadingSpinner = true) => {
     if (showLoadingSpinner) setLoading(true);
     try {
-      const [ordersRes, wholesaleRes, lowStockRes, movementsRes, catsRes, brandsRes] = await Promise.allSettled([
+      const [ordersRes, wholesaleRes, lowStockRes, movementsRes, catsRes, brandsRes, summaryRes] = await Promise.allSettled([
         getAllOrders(),
         getAllWholesaleOrders(),
         fetchLowStockProducts(),
         fetchStockMovements(),
         fetchCategories(),
         fetchBrands(),
+        fetchReportSummary({}),
       ]);
 
       if (ordersRes.status === 'fulfilled' && Array.isArray(ordersRes.value)) {
@@ -120,6 +122,9 @@ export default function DashboardPage() {
       }
       if (brandsRes.status === 'fulfilled' && Array.isArray(brandsRes.value)) {
         setBrands(brandsRes.value);
+      }
+      if (summaryRes.status === 'fulfilled' && summaryRes.value) {
+        setOverallSummary(summaryRes.value);
       }
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
@@ -187,7 +192,22 @@ export default function DashboardPage() {
 
   const pendingOrdersCount = pendingRetailCount + pendingWholesaleCount;
 
-  // 3. Total Revenue: completedRetailRevenue + completedWholesaleRevenue
+  // 3. Cancelled Orders: cancelledRetailCount + cancelledWholesaleCount
+  const cancelledRetailCount = useMemo(() => {
+    return orders.filter(
+      (o) => String(o.status || '').toUpperCase() === 'CANCELLED'
+    ).length;
+  }, [orders]);
+
+  const cancelledWholesaleCount = useMemo(() => {
+    return wholesaleOrders.filter(
+      (w) => String(w.status || '').toUpperCase() === 'CANCELLED'
+    ).length;
+  }, [wholesaleOrders]);
+
+  const cancelledOrdersCount = cancelledRetailCount + cancelledWholesaleCount;
+
+  // 4. Total Revenue: completedRetailRevenue + completedWholesaleRevenue
   const completedRetailRevenue = useMemo(() => {
     return orders
       .filter((o) => String(o.status || '').toUpperCase() === 'COMPLETED')
@@ -202,7 +222,18 @@ export default function DashboardPage() {
 
   const totalRevenue = completedRetailRevenue + completedWholesaleRevenue;
 
-  // 4. Low-Stock Count: Count of items returned by GET /api/products/low-stock
+  // 5. Total Profit & Margin (Settled gross profit and FIFO depletion metrics)
+  const totalProfit = useMemo(() => {
+    const profitVal = overallSummary?.kpis?.grossProfit ?? reportData?.kpis?.grossProfit;
+    return profitVal != null ? Number(profitVal) : 0;
+  }, [overallSummary, reportData]);
+
+  const profitMarginPercent = useMemo(() => {
+    const marginVal = overallSummary?.kpis?.profitMarginPercent ?? reportData?.kpis?.profitMarginPercent;
+    return marginVal != null ? Number(marginVal) : 0;
+  }, [overallSummary, reportData]);
+
+  // 6. Low-Stock Count: Count of items returned by GET /api/products/low-stock
   const lowStockCount = lowStockProducts.length;
 
   // ─── Recent Activity Calculations ──────────────────────────────────────────
@@ -312,9 +343,9 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* KPI Stat Cards (using shadow-surface and real backend data) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* KPI 1: Total Orders */}
+      {/* KPI Stat Cards (using shadow-surface and real backend data - 3 per row) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Row 1 / Card 1: Total Orders */}
         <Link to="/admin/orders" className="block transition-transform hover:-translate-y-0.5">
           <StatCard
             title="Total Orders"
@@ -329,7 +360,7 @@ export default function DashboardPage() {
           />
         </Link>
 
-        {/* KPI 2: Pending Orders */}
+        {/* Row 1 / Card 2: Pending Orders */}
         <Link to="/admin/orders" className="block transition-transform hover:-translate-y-0.5">
           <StatCard
             title="Pending Orders"
@@ -346,8 +377,25 @@ export default function DashboardPage() {
           />
         </Link>
 
-        {/* KPI 3: Total Revenue (strictly COMPLETED orders) */}
-        <div>
+        {/* Row 1 / Card 3: Cancelled Orders */}
+        <Link to="/admin/orders" className="block transition-transform hover:-translate-y-0.5">
+          <StatCard
+            title="Cancelled Orders"
+            value={loading ? '...' : String(cancelledOrdersCount).padStart(2, '0')}
+            subtext={`${cancelledRetailCount} Retail • ${cancelledWholesaleCount} Wholesale cancelled`}
+            badge={cancelledOrdersCount > 0 ? 'Voided' : 'All Clear'}
+            trend={cancelledOrdersCount > 0 ? 'Cancelled' : 'Clean'}
+            trendUp={cancelledOrdersCount === 0}
+            icon={
+              <svg className="w-5 h-5 text-neutral-900" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            }
+          />
+        </Link>
+
+        {/* Row 2 / Card 4: Total Revenue (strictly COMPLETED orders) */}
+        <Link to="/admin/reports" className="block transition-transform hover:-translate-y-0.5">
           <StatCard
             title="Total Revenue"
             value={
@@ -373,9 +421,33 @@ export default function DashboardPage() {
               </svg>
             }
           />
-        </div>
+        </Link>
 
-        {/* KPI 4: Low-Stock Count */}
+        {/* Row 2 / Card 5: Total Profit */}
+        <Link to="/admin/reports" className="block transition-transform hover:-translate-y-0.5">
+          <StatCard
+            title="Total Profit"
+            value={
+              loading
+                ? '...'
+                : `$${totalProfit.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`
+            }
+            subtext={`${profitMarginPercent.toFixed(1)}% Margin • Net after COGS`}
+            badge={totalProfit >= 0 ? 'Net Gain' : 'Deficit'}
+            trend={profitMarginPercent > 0 ? `${profitMarginPercent.toFixed(1)}%` : 'Net Profit'}
+            trendUp={totalProfit >= 0}
+            icon={
+              <svg className="w-5 h-5 text-neutral-900" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            }
+          />
+        </Link>
+
+        {/* Row 2 / Card 6: Low-Stock Alerts */}
         <Link to="/admin/low-stock" className="block transition-transform hover:-translate-y-0.5">
           <StatCard
             title="Low-Stock Alerts"

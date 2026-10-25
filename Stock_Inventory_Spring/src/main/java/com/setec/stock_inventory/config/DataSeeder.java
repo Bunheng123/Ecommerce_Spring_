@@ -89,25 +89,25 @@ public class DataSeeder implements CommandLineRunner {
         userRepository.save(admin);
         log.info("Default ADMIN user ready: username='admin', password='admin123', email='hengheng513.513@gmail.com', role='ADMIN'");
 
-        User stock = userRepository.findByUsername("stock").orElseGet(() -> User.builder()
-                .username("stock")
-                .email("stock@example.com")
-                .role(Role.STOCK)
-                .build());
-        stock.setPassword(passwordEncoder.encode("stock123"));
-        stock.setRole(Role.STOCK);
-        userRepository.save(stock);
-        log.info("Default STOCK user ready: username='stock', password='stock123', role='STOCK'");
-
-        User customer = userRepository.findByUsername("customer1").orElseGet(() -> User.builder()
-                .username("customer1")
-                .email("customer1@example.com")
+        User customer2 = userRepository.findByUsername("customer2").orElseGet(() -> User.builder()
+                .username("customer2")
+                .email("bunheng2209@example.com")
                 .role(Role.USER)
                 .build());
-        customer.setPassword(passwordEncoder.encode("customer123"));
-        customer.setRole(Role.USER);
-        userRepository.save(customer);
-        log.info("Default USER ready: username='customer1', password='customer123', role='USER'");
+        customer2.setPassword(passwordEncoder.encode("1234"));
+        customer2.setRole(Role.USER);
+        userRepository.save(customer2);
+        log.info("Default CUSTOMER user ready: username='customer2', password='1234', role='USER'");
+
+        User customer1 = userRepository.findByUsername("customer1").orElseGet(() -> User.builder()
+                .username("customer1")
+                .email("heng513.513@gmail.com")
+                .role(Role.USER)
+                .build());
+        customer1.setPassword(passwordEncoder.encode("1234"));
+        customer1.setRole(Role.USER);
+        userRepository.save(customer1);
+        log.info("Default USER ready: username='customer1', password='1234', role='USER'");
 
         try {
             stockBatchService.backfillInitialBatches();

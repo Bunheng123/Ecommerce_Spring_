@@ -25,31 +25,22 @@ export default function Topbar() {
   };
 
   return (
-    <header className="h-20 border-b border-neutral-200/80 bg-white px-8 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-      {/* Breadcrumb section with thick font */}
-      <div className="flex items-center gap-3">
-        <span className="text-[11px] font-black uppercase tracking-[0.16em] text-neutral-400">
-          ADMIN PORTAL
-        </span>
-        <span className="text-neutral-300 font-bold">/</span>
-        <h1 className="text-sm font-extrabold uppercase tracking-wider text-neutral-900 bg-neutral-100 px-3 py-1 rounded-lg">
-          {cleanTitle}
-        </h1>
-      </div>
-
-      {/* Right controls with rounded buttons and bold badges */}
-      <div className="flex items-center gap-4">
-        {/* Search input with rounded-xl */}
-        <div className="relative hidden md:block w-64">
-          <input
-            type="text"
-            placeholder="Quick search (SKU, Name)..."
-            className="w-full bg-[#F5F6FA] border border-neutral-200/80 text-xs font-bold text-neutral-800 placeholder:text-neutral-400 rounded-xl px-4 py-2.5 outline-none focus:border-neutral-900 focus:bg-white transition-all"
-          />
+    <header className="h-20 border-b border-neutral-200/80 bg-white sticky top-0 z-30 shadow-xs">
+      <div className="h-full max-w-7xl w-full mx-auto px-6 md:px-8 flex items-center justify-between">
+        {/* Breadcrumb section with thick font */}
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] font-black uppercase tracking-[0.16em] text-neutral-400">
+            ADMIN PORTAL
+          </span>
+          <span className="text-neutral-300 font-bold">/</span>
+          <h1 className="text-sm font-extrabold uppercase tracking-wider text-neutral-900 bg-neutral-100 px-3 py-1 rounded-lg">
+            {cleanTitle}
+          </h1>
         </div>
 
-        {/* Admin profile pill button - opens Account Drawer */}
-        <div className="flex items-center gap-3 pl-2 border-l border-neutral-200">
+        {/* Right controls */}
+        <div className="flex items-center gap-3">
+          {/* Admin profile pill button - opens Account Drawer */}
           <button
             type="button"
             onClick={() => setIsAccountDrawerOpen(true)}
