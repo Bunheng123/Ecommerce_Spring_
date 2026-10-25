@@ -53,6 +53,20 @@ public class DataSeeder implements CommandLineRunner {
                 FROM products p
                 WHERE woi.product_id = p.id AND woi.total_cogs IS NULL;
             """);
+
+            // Ensure CTRL brand and Hero categories exist
+            jdbcTemplate.execute("""
+                INSERT INTO brands (name, description, created_at, updated_at)
+                VALUES ('CTRL', 'Contemporary elevated essentials and statement silhouettes', NOW(), NOW())
+                ON CONFLICT (name) DO NOTHING;
+            """);
+            jdbcTemplate.execute("""
+                INSERT INTO categories (col_name, description, created_at, updated_at)
+                VALUES 
+                  ('Knitwear & Hoodies', 'Heavyweight knits, vintage fleeces, and statement tops', NOW(), NOW()),
+                  ('Denim & Tailoring', 'Archival denim, structured trousers, and raw-hem blazers', NOW(), NOW())
+                ON CONFLICT (col_name) DO NOTHING;
+            """);
         } catch (Exception e) {
             log.warn("Could not execute startup schema updates: {}", e.getMessage());
         }

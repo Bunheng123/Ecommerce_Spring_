@@ -1,28 +1,25 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { SAMPLE_PRODUCTS } from '../../data/previewProducts';
-import { useCart } from '../../context/CartContext';
-import { useWishlist } from '../../context/WishlistContext';
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { SAMPLE_PRODUCTS } from "../../data/previewProducts";
+import { useCart } from "../../context/CartContext";
+import { useWishlist } from "../../context/WishlistContext";
 
 // Default fallback sample item matching Spring Boot ProductResponseDto
 const DEFAULT_SAMPLE_CARD = SAMPLE_PRODUCTS[0];
 
 // variant "grid"    -> CART (white) + BUY NOW (black) buttons (storefront grid)
 // variant "compact" -> single full-width ADD TO CART button (recommendations carousel)
-export default function ProductCard({
-  product = DEFAULT_SAMPLE_CARD,
-  onAdd,
-}) {
+export default function ProductCard({ product = DEFAULT_SAMPLE_CARD, onAdd }) {
   const navigate = useNavigate();
   const { addItem } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
   const [isAdding, setIsAdding] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState("");
   const item = product || DEFAULT_SAMPLE_CARD;
 
   const {
     id = 1,
-    name = 'Unnamed Product',
+    name = "Unnamed Product",
     brand,
     price = 0,
     imageUrl,
@@ -30,37 +27,48 @@ export default function ProductCard({
     reorderLevel,
     active = true,
     categoryName,
-    label = categoryName ? `${categoryName.toUpperCase()} / ${String(id).padStart(2, '0')}` : 'GENERAL / 01',
-    badgeType = 'black',
+    label = categoryName
+      ? `${categoryName.toUpperCase()} / ${String(id).padStart(2, "0")}`
+      : "GENERAL / 01",
+    badgeType = "black",
   } = item;
 
   const numStock = Number(stock ?? 0);
-  const threshold = (reorderLevel != null && reorderLevel > 0) ? reorderLevel : 5;
-  const isComingSoon = (stock === 0 || numStock <= 0) && Boolean(item.comingSoon);
+  const threshold = reorderLevel != null && reorderLevel > 0 ? reorderLevel : 5;
+  const isComingSoon =
+    (stock === 0 || numStock <= 0) && Boolean(item.comingSoon);
   const isSoldOut = !isComingSoon && (stock === 0 || numStock <= 0);
-  const isLowStock = !isComingSoon && !isSoldOut && (numStock <= threshold || numStock <= 5);
+  const isLowStock =
+    !isComingSoon && !isSoldOut && (numStock <= threshold || numStock <= 5);
 
   // Auto-determine retail scarcity badge
   let computedBadge = item.badge || null;
   if (!computedBadge) {
     if (!active) {
-      computedBadge = 'Archived';
+      computedBadge = "Archived";
     } else if (isComingSoon) {
-      computedBadge = 'COMING SOON';
+      computedBadge = "COMING SOON";
     } else if (isSoldOut) {
-      computedBadge = 'Out of Stock';
+      computedBadge = "Out of Stock";
     } else if (isLowStock) {
       computedBadge = `Only ${numStock} left`;
     }
   }
 
-  const soldOut = isSoldOut || computedBadge === 'Out of Stock' || computedBadge === 'Sold out';
+  const soldOut =
+    isSoldOut ||
+    computedBadge === "Out of Stock" ||
+    computedBadge === "Sold out";
   const inWishlist = isInWishlist(id);
   const btn =
-    'flex h-[38px] items-center justify-center text-xs font-bold uppercase tracking-[0.08em] transition-colors';
+    "flex h-[38px] items-center justify-center text-xs font-bold uppercase tracking-[0.08em] transition-colors";
 
   const renderBadge = () => {
-    if (isComingSoon || computedBadge === 'COMING SOON' || computedBadge === 'Coming Soon') {
+    if (
+      isComingSoon ||
+      computedBadge === "COMING SOON" ||
+      computedBadge === "Coming Soon"
+    ) {
       return (
         <span className="absolute left-3 top-3 border border-ink bg-white px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-ink">
           COMING SOON
@@ -68,7 +76,11 @@ export default function ProductCard({
       );
     }
     if (!computedBadge) return null;
-    if (computedBadge === 'ARCHIVE' || computedBadge === 'Archived' || badgeType === 'outline') {
+    if (
+      computedBadge === "ARCHIVE" ||
+      computedBadge === "Archived" ||
+      badgeType === "outline"
+    ) {
       return (
         <span className="absolute left-3 top-3 border border-ink bg-white px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-ink">
           {computedBadge}
@@ -102,14 +114,14 @@ export default function ProductCard({
         <div className="relative block aspect-square border-b border-line bg-[#FAFAFA] overflow-hidden group">
           <Link
             to={`/product/${id}`}
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             className="block h-full w-full"
           >
             {imageUrl ? (
               <img
                 src={imageUrl}
                 alt={name}
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
                 loading="lazy"
               />
             ) : (
@@ -127,20 +139,20 @@ export default function ProductCard({
               e.stopPropagation();
               toggleWishlist(item, navigate);
             }}
-            aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
-            title={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+            aria-label={inWishlist ? "Remove from wishlist" : "Add to wishlist"}
+            title={inWishlist ? "Remove from wishlist" : "Add to wishlist"}
             className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-white/95 hover:bg-white border border-line text-ink flex items-center justify-center shadow-xs transition-transform duration-150 hover:scale-110 active:scale-95 cursor-pointer"
           >
             <svg
               width="15"
               height="15"
               viewBox="0 0 24 24"
-              fill={inWishlist ? 'currentColor' : 'none'}
+              fill={inWishlist ? "currentColor" : "none"}
               stroke="currentColor"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className={inWishlist ? 'text-ink' : 'text-neutral-600'}
+              className={inWishlist ? "text-ink" : "text-neutral-600"}
             >
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
             </svg>
@@ -160,7 +172,7 @@ export default function ProductCard({
           </div>
           <Link
             to={`/product/${id}`}
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           >
             <h3 className="text-base font-bold leading-snug tracking-[-0.02em] text-ink line-clamp-1 hover:underline">
               {name}
@@ -172,8 +184,16 @@ export default function ProductCard({
               ${Number(price).toFixed(2)}
             </p>
             {stock != null && (
-              <span className={`text-[10px] uppercase tracking-wider ${isComingSoon ? 'font-bold text-ink' : isLowStock ? 'font-bold text-neutral-900' : 'text-muted'}`}>
-                {isComingSoon ? 'Coming Soon' : (soldOut ? 'Out of stock' : (isLowStock ? `Only ${numStock} left` : 'In stock'))}
+              <span
+                className={`text-[10px] uppercase tracking-wider ${isComingSoon ? "font-bold text-ink" : isLowStock ? "font-bold text-neutral-900" : "text-muted"}`}
+              >
+                {isComingSoon
+                  ? "Coming Soon"
+                  : soldOut
+                    ? "Out of stock"
+                    : isLowStock
+                      ? `Only ${numStock} left`
+                      : "In stock"}
               </span>
             )}
           </div>
@@ -194,20 +214,20 @@ export default function ProductCard({
             type="button"
             disabled={soldOut || isAdding}
             onClick={async () => {
-              setErrorMessage('');
+              setErrorMessage("");
               setIsAdding(true);
               try {
                 if (onAdd) await onAdd(item);
                 else await addItem(item, 1);
               } catch (err) {
-                setErrorMessage(err.message || 'Unable to add to cart');
+                setErrorMessage(err.message || "Unable to add to cart");
               } finally {
                 setIsAdding(false);
               }
             }}
             className={`${btn} w-full border border-ink bg-ink text-white hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}
           >
-            {isAdding ? 'Adding...' : 'Add to cart'}
+            {isAdding ? "Adding..." : "Add to cart"}
           </button>
         )}
 

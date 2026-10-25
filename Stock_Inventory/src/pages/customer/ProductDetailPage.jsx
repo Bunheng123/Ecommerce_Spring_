@@ -170,7 +170,7 @@ export default function ProductDetailPage() {
   // Loading skeleton state
   if (isLoading) {
     return (
-      <div className="bg-surface min-h-screen py-10">
+      <div className="bg-surface min-h-screen py-10 animate-fade-in">
         <div className="mx-auto max-w-[1280px] px-6 md:px-12 animate-pulse">
           <div className="mb-8 h-4 w-48 bg-line/60 rounded" />
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 border border-line bg-white p-6 md:p-10">
@@ -257,7 +257,7 @@ export default function ProductDetailPage() {
   };
 
   return (
-    <div className="bg-surface min-h-screen py-10">
+    <div className="bg-surface min-h-screen py-10 animate-fade-in">
       <div className="mx-auto max-w-[1280px] px-6 md:px-12">
         {/* Breadcrumb Navigation */}
         <nav className="mb-8 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.1em] text-muted">
