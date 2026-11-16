@@ -26,24 +26,45 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(RateLimitExceededException.class)
-    public ResponseEntity<ApiResponse<Object>> handleRateLimitExceededException(RateLimitExceededException ex) {
+    public ResponseEntity<Map<String, Object>> handleRateLimitExceededException(RateLimitExceededException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("success", false);
+        body.put("message", ex.getMessage());
+        body.put("retryAfterSeconds", ex.getRetryAfterSeconds());
+        body.put("timestamp", LocalDateTime.now());
+        return ResponseEntity.status(419)
+                .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
+                .body(body);
+    }
+
+    @ExceptionHandler(IpBlockedException.class)
+    public ResponseEntity<Map<String, Object>> handleIpBlockedException(IpBlockedException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("success", false);
+        body.put("message", ex.getMessage());
+        body.put("blocked", true);
+        body.put("retryAfterSeconds", ex.getRetryAfterSeconds());
+        body.put("remainingAttempts", ex.getRemainingAttempts());
+        body.put("timestamp", LocalDateTime.now());
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
-                .body(ApiResponse.error(ex.getMessage()));
+                .body(body);
+    }
+
+    @ExceptionHandler(LoginFailedException.class)
+    public ResponseEntity<Map<String, Object>> handleLoginFailedException(LoginFailedException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("success", false);
+        body.put("message", ex.getMessage());
+        body.put("remainingAttempts", ex.getRemainingAttempts());
+        body.put("timestamp", LocalDateTime.now());
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
     public ResponseEntity<ApiResponse<Object>> handleBadCredentialsException(org.springframework.security.authentication.BadCredentialsException ex) {
         return new ResponseEntity<>(
                 ApiResponse.error("Invalid username or password."),
-                HttpStatus.BAD_REQUEST
-        );
-    }
-
-    @ExceptionHandler(org.springframework.security.authentication.LockedException.class)
-    public ResponseEntity<ApiResponse<Object>> handleLockedException(org.springframework.security.authentication.LockedException ex) {
-        return new ResponseEntity<>(
-                ApiResponse.error(ex.getMessage()),
                 HttpStatus.BAD_REQUEST
         );
     }

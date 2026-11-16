@@ -21,6 +21,15 @@ export async function login(credentials) {
 }
 
 /**
+ * Get login protection status for caller's IP
+ * @returns {Promise<{ blocked: boolean, retryAfterSeconds: number, remainingAttempts: number }>}
+ */
+export async function getLoginStatus() {
+  const response = await apiClient.get('/auth/login-status');
+  return response.data;
+}
+
+/**
  * Get current authenticated user's profile details
  * @returns {Promise<any>} User profile object
  */

@@ -12,27 +12,36 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @Transactional
+@TestPropertySource(properties = {
+        "auth.rate-limit.trust-forwarded-header=true",
+        "auth.rate-limit.max-requests-per-minute=10",
+        "auth.rate-limit.max-failed-attempts=5",
+        "auth.rate-limit.block-duration-seconds=60"
+})
 public class AuthRateLimitAndLockoutIntegrationTest {
 
     @Autowired
@@ -53,130 +62,189 @@ public class AuthRateLimitAndLockoutIntegrationTest {
     @Autowired
     private LoginRateLimiterService rateLimiterService;
 
-    private String adminToken;
+    @Autowired
+    private Clock clock;
+
     private User testUser;
     private final String rawPassword = "correctPassword123";
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         mockMvc = MockMvcBuilders
                 .webAppContextSetup(context)
                 .apply(springSecurity())
                 .build();
 
-        // Seed a distinct test user
+        rateLimiterService.reset();
+        rateLimiterService.setClock(clock);
+        rateLimiterService.setTrustForwardedHeader(true);
+
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         testUser = userRepository.save(User.builder()
-                .username("test_lockout_" + suffix)
-                .email("lockout_" + suffix + "@test.com")
+                .username("test_ip_user_" + suffix)
+                .email("ip_user_" + suffix + "@test.com")
                 .password(passwordEncoder.encode(rawPassword))
                 .role(Role.USER)
                 .active(true)
-                .failedAttempts(0)
                 .build());
-
-        // Obtain admin token
-        LoginRequest adminLogin = new LoginRequest("admin", "admin123");
-        MvcResult adminRes = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(adminLogin)))
-                .andExpect(status().isOk())
-                .andReturn();
-        JsonNode jsonNode = objectMapper.readTree(adminRes.getResponse().getContentAsString());
-        adminToken = jsonNode.get("token").asText();
     }
 
     @Test
-    void testWrongPasswordIncrementsFailedAttemptsAndShowsRemaining() throws Exception {
-        LoginRequest badLogin = new LoginRequest(testUser.getUsername(), "wrongPass");
+    void test1_fiveWrongPasswordsFromOneIpBlocksTheSixthAttemptEvenWithCorrectPassword() throws Exception {
+        String testIp = "198.51.100.10";
+        LoginRequest badLogin = new LoginRequest(testUser.getUsername(), "wrongPassword");
 
-        MvcResult result = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(badLogin)))
-                .andExpect(status().isBadRequest())
-                .andReturn();
-
-        String responseBody = result.getResponse().getContentAsString();
-        assertTrue(responseBody.contains("4 attempts remaining"), "Expected 4 attempts remaining in response: " + responseBody);
-
-        User updated = userRepository.findById(testUser.getId()).orElseThrow();
-        assertEquals(1, updated.getFailedAttempts());
-        assertNull(updated.getLockoutUntil());
-    }
-
-    @Test
-    void testFiveFailedAttemptsLocksAccount() throws Exception {
-        LoginRequest badLogin = new LoginRequest(testUser.getUsername(), "wrongPass");
-
+        // First 4 failed attempts return 400 Bad Request with remainingAttempts count
         for (int i = 1; i <= 4; i++) {
-            mockMvc.perform(post("/api/auth/login")
+            MvcResult res = mockMvc.perform(post("/api/auth/login")
+                            .header("X-Forwarded-For", testIp)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(badLogin)))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isBadRequest())
+                    .andReturn();
+
+            JsonNode node = objectMapper.readTree(res.getResponse().getContentAsString());
+            assertEquals(5 - i, node.get("remainingAttempts").asInt());
         }
 
-        // 5th attempt triggers lockout
+        // 5th failed attempt blocks the IP -> returns 429 Too Many Requests
         MvcResult res5 = mockMvc.perform(post("/api/auth/login")
+                        .header("X-Forwarded-For", testIp)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(badLogin)))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("Retry-After"))
                 .andReturn();
 
-        String body5 = res5.getResponse().getContentAsString();
-        assertTrue(body5.contains("Account has been locked for 15 minutes"), "Expected lockout notification in: " + body5);
+        JsonNode node5 = objectMapper.readTree(res5.getResponse().getContentAsString());
+        assertTrue(node5.get("blocked").asBoolean());
+        assertTrue(node5.get("retryAfterSeconds").asLong() > 0);
 
-        User lockedUser = userRepository.findById(testUser.getId()).orElseThrow();
-        assertEquals(5, lockedUser.getFailedAttempts());
-        assertNotNull(lockedUser.getLockoutUntil());
-        assertTrue(lockedUser.isAccountLocked());
-    }
-
-    @Test
-    void testLockedAccountRejectsEvenCorrectPassword() throws Exception {
-        // Manually lock user
-        testUser.setFailedAttempts(5);
-        testUser.setLockoutUntil(LocalDateTime.now().plusMinutes(15));
-        userRepository.save(testUser);
-
-        LoginRequest validLogin = new LoginRequest(testUser.getUsername(), rawPassword);
-
-        MvcResult res = mockMvc.perform(post("/api/auth/login")
+        // 6th attempt with CORRECT password from same IP is still blocked with 429
+        LoginRequest correctLogin = new LoginRequest(testUser.getUsername(), rawPassword);
+        MvcResult res6 = mockMvc.perform(post("/api/auth/login")
+                        .header("X-Forwarded-For", testIp)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(validLogin)))
-                .andExpect(status().isBadRequest())
+                        .content(objectMapper.writeValueAsString(correctLogin)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("Retry-After"))
                 .andReturn();
 
-        String body = res.getResponse().getContentAsString();
-        assertTrue(body.contains("temporarily locked"), "Expected lockout message even with correct password: " + body);
+        JsonNode node6 = objectMapper.readTree(res6.getResponse().getContentAsString());
+        assertTrue(node6.get("blocked").asBoolean());
     }
 
     @Test
-    void testSuccessfulLoginResetsFailedAttempts() throws Exception {
-        // User has 3 previous failed attempts
-        testUser.setFailedAttempts(3);
-        userRepository.save(testUser);
+    void test2_differentUserAgentOrSessionFromSameIpIsStillBlocked() throws Exception {
+        String testIp = "198.51.100.11";
+        LoginRequest badLogin = new LoginRequest(testUser.getUsername(), "wrongPassword");
 
-        LoginRequest validLogin = new LoginRequest(testUser.getUsername(), rawPassword);
+        // 5 failed logins from browser A
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/auth/login")
+                    .header("X-Forwarded-For", testIp)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Chrome/120)")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(badLogin)));
+        }
 
+        // Attempt from browser B (different User-Agent / incognito) on same IP is still blocked
+        LoginRequest correctLogin = new LoginRequest(testUser.getUsername(), rawPassword);
         mockMvc.perform(post("/api/auth/login")
+                        .header("X-Forwarded-For", testIp)
+                        .header("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0; Safari/604.1)")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(validLogin)))
-                .andExpect(status().isOk());
-
-        User freshUser = userRepository.findById(testUser.getId()).orElseThrow();
-        assertEquals(0, freshUser.getFailedAttempts(), "Successful login must reset failed attempts to 0");
-        assertNull(freshUser.getLockoutUntil());
+                        .content(objectMapper.writeValueAsString(correctLogin)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("Retry-After"));
     }
 
     @Test
-    void testIpRateLimiterBlocksExcessiveAttempts() throws Exception {
-        String testIp = "203.0.113.42";
-        rateLimiterService.reset(testIp);
+    void test3_differentIpIsNotBlocked() throws Exception {
+        String blockedIp = "198.51.100.12";
+        String cleanIp = "198.51.100.13";
+        LoginRequest badLogin = new LoginRequest(testUser.getUsername(), "wrongPassword");
 
-        LoginRequest badLogin = new LoginRequest("non_existent_user", "badpass");
+        // Block IP 1
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/auth/login")
+                    .header("X-Forwarded-For", blockedIp)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(badLogin)));
+        }
 
-        // Execute MAX_ATTEMPTS (10) failed attempts from this IP
-        for (int i = 0; i < LoginRateLimiterService.MAX_ATTEMPTS; i++) {
+        // Clean IP can log in successfully with correct password
+        LoginRequest correctLogin = new LoginRequest(testUser.getUsername(), rawPassword);
+        mockMvc.perform(post("/api/auth/login")
+                        .header("X-Forwarded-For", cleanIp)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(correctLogin)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void test4_blockExpiresAfterOneMinute() throws Exception {
+        String testIp = "198.51.100.14";
+        Instant t0 = Instant.parse("2026-11-16T10:00:00Z");
+        rateLimiterService.setClock(Clock.fixed(t0, ZoneId.of("UTC")));
+
+        LoginRequest badLogin = new LoginRequest(testUser.getUsername(), "wrongPassword");
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/auth/login")
+                    .header("X-Forwarded-For", testIp)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(badLogin)));
+        }
+
+        // Verify blocked at t0
+        LoginRequest correctLogin = new LoginRequest(testUser.getUsername(), rawPassword);
+        mockMvc.perform(post("/api/auth/login")
+                        .header("X-Forwarded-For", testIp)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(correctLogin)))
+                .andExpect(status().isTooManyRequests());
+
+        // Advance clock by 61 seconds (block duration is 60s)
+        rateLimiterService.setClock(Clock.fixed(t0.plusSeconds(61), ZoneId.of("UTC")));
+
+        // Now login succeeds!
+        mockMvc.perform(post("/api/auth/login")
+                        .header("X-Forwarded-For", testIp)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(correctLogin)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void test5_eleventhRequestWithinOneMinuteReturns419() throws Exception {
+        String testIp = "198.51.100.15";
+
+        // Perform 10 requests to login-status within 1 minute
+        for (int i = 1; i <= 10; i++) {
+            mockMvc.perform(get("/api/auth/login-status")
+                            .header("X-Forwarded-For", testIp))
+                    .andExpect(status().isOk());
+        }
+
+        // 11th request within the minute returns HTTP 419
+        MvcResult res11 = mockMvc.perform(get("/api/auth/login-status")
+                        .header("X-Forwarded-For", testIp))
+                .andExpect(status().is(419))
+                .andExpect(header().exists("Retry-After"))
+                .andReturn();
+
+        JsonNode body = objectMapper.readTree(res11.getResponse().getContentAsString());
+        assertFalse(body.get("success").asBoolean());
+        assertTrue(body.get("retryAfterSeconds").asLong() > 0);
+    }
+
+    @Test
+    void test6_successfulLoginResetsFailureCounter() throws Exception {
+        String testIp = "198.51.100.16";
+        LoginRequest badLogin = new LoginRequest(testUser.getUsername(), "wrongPassword");
+
+        // 3 failed logins
+        for (int i = 1; i <= 3; i++) {
             mockMvc.perform(post("/api/auth/login")
                             .header("X-Forwarded-For", testIp)
                             .contentType(MediaType.APPLICATION_JSON)
@@ -184,36 +252,42 @@ public class AuthRateLimitAndLockoutIntegrationTest {
                     .andExpect(status().isBadRequest());
         }
 
-        // 11th attempt must be rejected with 429 Too Many Requests
+        assertEquals(2, rateLimiterService.getRemainingAttempts(testIp));
+
+        // Successful login
+        LoginRequest correctLogin = new LoginRequest(testUser.getUsername(), rawPassword);
         mockMvc.perform(post("/api/auth/login")
                         .header("X-Forwarded-For", testIp)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(badLogin)))
-                .andExpect(status().isTooManyRequests())
-                .andExpect(header().exists("Retry-After"));
+                        .content(objectMapper.writeValueAsString(correctLogin)))
+                .andExpect(status().isOk());
 
-        rateLimiterService.reset(testIp);
+        // Counter is reset to 5 remaining attempts
+        assertEquals(5, rateLimiterService.getRemainingAttempts(testIp));
     }
 
     @Test
-    void testAdminToggleStatusUnlocksUser() throws Exception {
-        // Lock user
-        testUser.setFailedAttempts(5);
-        testUser.setLockoutUntil(LocalDateTime.now().plusMinutes(15));
-        userRepository.save(testUser);
+    void test7_loginStatusReturnsBlockedTrueWithRetryAfterSecondsWhileBlocked() throws Exception {
+        String testIp = "198.51.100.17";
+        LoginRequest badLogin = new LoginRequest(testUser.getUsername(), "wrongPassword");
 
-        // Admin toggles user status twice (inactive -> active)
-        mockMvc.perform(patch("/api/users/" + testUser.getId() + "/toggle-status")
-                        .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isOk());
+        // 5 failed logins
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/auth/login")
+                    .header("X-Forwarded-For", testIp)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(badLogin)));
+        }
 
-        mockMvc.perform(patch("/api/users/" + testUser.getId() + "/toggle-status")
-                        .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isOk());
+        // Check login-status
+        MvcResult statusRes = mockMvc.perform(get("/api/auth/login-status")
+                        .header("X-Forwarded-For", testIp))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        User unlockedUser = userRepository.findById(testUser.getId()).orElseThrow();
-        assertTrue(unlockedUser.isActive());
-        assertEquals(0, unlockedUser.getFailedAttempts(), "Admin reactivation must reset failed attempts");
-        assertNull(unlockedUser.getLockoutUntil(), "Admin reactivation must clear lockout timestamp");
+        JsonNode statusJson = objectMapper.readTree(statusRes.getResponse().getContentAsString());
+        assertTrue(statusJson.get("blocked").asBoolean(), "Expected blocked=true");
+        assertTrue(statusJson.get("retryAfterSeconds").asLong() > 0, "Expected retryAfterSeconds > 0");
+        assertEquals(0, statusJson.get("remainingAttempts").asInt(), "Expected remainingAttempts = 0");
     }
 }

@@ -26,8 +26,8 @@ public class DataSeeder implements CommandLineRunner {
             jdbcTemplate.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;");
             jdbcTemplate.execute("ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('ADMIN', 'STOCK', 'USER'));");
             jdbcTemplate.execute("ALTER TABLE users DROP COLUMN IF EXISTS address;");
-            jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts integer DEFAULT 0;");
-            jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS lockout_until timestamp;");
+            jdbcTemplate.execute("ALTER TABLE users DROP COLUMN IF EXISTS failed_attempts;");
+            jdbcTemplate.execute("ALTER TABLE users DROP COLUMN IF EXISTS lockout_until;");
             jdbcTemplate.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS subtotal numeric(12,2);");
             jdbcTemplate.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_cost numeric(12,2) DEFAULT 0.00;");
             jdbcTemplate.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_amount numeric(12,2) DEFAULT 0.00;");
@@ -90,6 +90,17 @@ public class DataSeeder implements CommandLineRunner {
         admin.setEmail("hengheng513.513@gmail.com");
         userRepository.save(admin);
         log.info("Default ADMIN user ready: username='admin', password='admin123', email='hengheng513.513@gmail.com', role='ADMIN'");
+
+        User stock = userRepository.findByUsername("stock").orElseGet(() -> User.builder()
+                .username("stock")
+                .email("stock@example.com")
+                .role(Role.STOCK)
+                .build());
+        stock.setPassword(passwordEncoder.encode("stock123"));
+        stock.setRole(Role.STOCK);
+        stock.setActive(true);
+        userRepository.save(stock);
+        log.info("Default STOCK user ready: username='stock', password='stock123', role='STOCK'");
 
         User customer2 = userRepository.findByUsername("customer2").orElseGet(() -> User.builder()
                 .username("customer2")

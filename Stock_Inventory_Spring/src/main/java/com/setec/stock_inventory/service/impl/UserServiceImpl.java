@@ -114,10 +114,6 @@ public class UserServiceImpl implements UserService {
                 throw new BadRequestException("You cannot deactivate your own admin account");
             }
             user.setActive(request.getActive());
-            if (Boolean.TRUE.equals(request.getActive())) {
-                user.setFailedAttempts(0);
-                user.setLockoutUntil(null);
-            }
         }
 
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
@@ -139,10 +135,6 @@ public class UserServiceImpl implements UserService {
                 () -> new ResourceNotFoundException("User not found with id " + id)
         );
         user.setActive(!user.isActive());
-        if (user.isActive()) {
-            user.setFailedAttempts(0);
-            user.setLockoutUntil(null);
-        }
         User updatedUser = userRepository.save(user);
         return UserMapper.toResponse(updatedUser);
     }

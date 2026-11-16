@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { login as loginApi, getCurrentUser } from '../../api/auth';
+import { login as loginApi, getCurrentUser, getLoginStatus } from '../../api/auth';
 import { AlertDialog } from '../../admin/utils/swalConfig';
 
 export default function LoginPage() {
@@ -16,9 +16,65 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+
+  // Check login-status for caller's IP
+  const checkStatus = useCallback(async () => {
+    try {
+      const res = await getLoginStatus();
+      if (res?.blocked) {
+        setIsBlocked(true);
+        const sec = res.retryAfterSeconds || 60;
+        setCountdown(sec);
+        setErrorMessage(`Too many attempts from your network. Try again in ${sec} seconds.`);
+      } else {
+        setIsBlocked(false);
+        setCountdown(0);
+      }
+    } catch (err) {
+      if (err.response?.status === 419 || err.response?.status === 429) {
+        const sec = err.response?.data?.retryAfterSeconds || 60;
+        setIsBlocked(true);
+        setCountdown(sec);
+        setErrorMessage(`Too many attempts from your network. Try again in ${sec} seconds.`);
+      }
+    }
+  }, []);
+
+  // Fetch status on page load
+  useEffect(() => {
+    checkStatus();
+  }, [checkStatus]);
+
+  // Countdown timer for IP block
+  useEffect(() => {
+    if (countdown <= 0) {
+      if (isBlocked) {
+        setIsBlocked(false);
+        checkStatus();
+      }
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setIsBlocked(false);
+          checkStatus();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [countdown, isBlocked, checkStatus]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isBlocked || countdown > 0) return;
     setErrorMessage('');
 
     const cleanUsername = username.trim();
@@ -61,16 +117,20 @@ export default function LoginPage() {
     } catch (err) {
       console.error('Login failed:', err);
       const status = err.response?.status;
-      const backendMessage = err.response?.data?.message || err.message;
+      const data = err.response?.data;
+      const backendMessage = data?.message || err.message;
       const cleanMessage = typeof backendMessage === 'string'
         ? backendMessage.replace(/^Error\s*:\s*/i, '')
         : '';
 
-      if (status === 429) {
-        const msg = cleanMessage || 'Too many login attempts. Please wait a moment before trying again.';
+      if (status === 419 || status === 429 || data?.blocked) {
+        const sec = data?.retryAfterSeconds || 60;
+        setIsBlocked(true);
+        setCountdown(sec);
+        const msg = `Too many attempts from your network. Try again in ${sec} seconds.`;
         setErrorMessage(msg);
         AlertDialog.fire({
-          title: 'Too Many Requests',
+          title: status === 419 ? 'Request Limit Exceeded' : 'Network Blocked',
           text: msg,
         });
       } else if (cleanMessage && cleanMessage.toLowerCase().includes('deactivated')) {
@@ -79,16 +139,13 @@ export default function LoginPage() {
           title: 'Account Suspended',
           text: cleanMessage,
         });
-      } else if (cleanMessage && cleanMessage.toLowerCase().includes('locked')) {
-        setErrorMessage(cleanMessage);
-        AlertDialog.fire({
-          title: 'Account Locked',
-          text: cleanMessage,
-        });
-      } else if (cleanMessage && cleanMessage.toLowerCase().includes('remaining')) {
-        setErrorMessage(cleanMessage);
       } else {
-        setErrorMessage(cleanMessage || 'Invalid username or password');
+        const rem = data?.remainingAttempts;
+        if (typeof rem === 'number') {
+          setErrorMessage(`Invalid username or password. ${rem} attempt${rem === 1 ? '' : 's'} remaining before network block.`);
+        } else {
+          setErrorMessage(cleanMessage || 'Invalid username or password');
+        }
       }
     } finally {
       setIsSubmitting(false);
@@ -117,6 +174,13 @@ export default function LoginPage() {
           </div>
         )}
 
+        {/* IP Block countdown warning */}
+        {(isBlocked || countdown > 0) && (
+          <div className="mb-6 p-3 border border-red-300 bg-red-50 text-red-700 text-xs font-semibold text-center rounded">
+            Too many attempts from your network. Try again in {countdown} seconds.
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-ink mb-1.5">
@@ -125,13 +189,14 @@ export default function LoginPage() {
             <input
               type="text"
               required
+              disabled={isBlocked || countdown > 0}
               value={username}
               onChange={(e) => {
                 setUsername(e.target.value);
                 if (errorMessage) setErrorMessage('');
               }}
               placeholder="e.g. alexander"
-              className="w-full border border-line bg-[#FAFAFA] px-3.5 py-2.5 text-xs text-ink placeholder:text-subtle outline-none focus:border-ink focus:bg-white"
+              className="w-full border border-line bg-[#FAFAFA] px-3.5 py-2.5 text-xs text-ink placeholder:text-subtle outline-none focus:border-ink focus:bg-white disabled:opacity-50 disabled:bg-neutral-100"
             />
           </div>
 
@@ -142,18 +207,19 @@ export default function LoginPage() {
             <input
               type="password"
               required
+              disabled={isBlocked || countdown > 0}
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
                 if (errorMessage) setErrorMessage('');
               }}
               placeholder="Your password"
-              className="w-full border border-line bg-[#FAFAFA] px-3.5 py-2.5 text-xs text-ink placeholder:text-subtle outline-none focus:border-ink focus:bg-white"
+              className="w-full border border-line bg-[#FAFAFA] px-3.5 py-2.5 text-xs text-ink placeholder:text-subtle outline-none focus:border-ink focus:bg-white disabled:opacity-50 disabled:bg-neutral-100"
             />
           </div>
 
-          {/* Plain inline error message */}
-          {errorMessage && (
+          {/* Inline error message */}
+          {errorMessage && !(isBlocked || countdown > 0) && (
             <div className="pt-1">
               <p className="text-xs text-red-600 font-semibold">
                 {errorMessage}
@@ -164,10 +230,14 @@ export default function LoginPage() {
           <div className="pt-2 flex flex-col gap-3">
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isBlocked || countdown > 0}
               className="w-full h-11 bg-ink text-white text-xs font-bold uppercase tracking-[0.12em] hover:bg-neutral-800 disabled:opacity-50 transition-colors cursor-pointer"
             >
-              {isSubmitting ? 'Signing In...' : 'Sign In'}
+              {isBlocked || countdown > 0
+                ? `Try again in ${countdown}s`
+                : isSubmitting
+                ? 'Signing In...'
+                : 'Sign In'}
             </button>
           </div>
         </form>

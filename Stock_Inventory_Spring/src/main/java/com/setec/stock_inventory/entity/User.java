@@ -51,20 +51,9 @@ public class User {
     @Column(nullable = false, columnDefinition = "boolean default true")
     private boolean active = true;
 
-    @Builder.Default
-    @Column(name = "failed_attempts", nullable = false, columnDefinition = "integer default 0")
-    private int failedAttempts = 0;
-
-    @Column(name = "lockout_until")
-    private LocalDateTime lockoutUntil;
-
     @CreationTimestamp
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
-
-    public boolean isAccountLocked() {
-        return lockoutUntil != null && lockoutUntil.isAfter(LocalDateTime.now());
-    }
 }
