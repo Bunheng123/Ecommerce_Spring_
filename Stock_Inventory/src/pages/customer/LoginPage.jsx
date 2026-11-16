@@ -60,16 +60,35 @@ export default function LoginPage() {
       navigate(role === 'ADMIN' ? '/admin' : '/');
     } catch (err) {
       console.error('Login failed:', err);
+      const status = err.response?.status;
       const backendMessage = err.response?.data?.message || err.message;
-      if (backendMessage && typeof backendMessage === 'string' && backendMessage.toLowerCase().includes('deactivated')) {
-        const cleanMessage = backendMessage.replace(/^Error\s*:\s*/i, '');
+      const cleanMessage = typeof backendMessage === 'string'
+        ? backendMessage.replace(/^Error\s*:\s*/i, '')
+        : '';
+
+      if (status === 429) {
+        const msg = cleanMessage || 'Too many login attempts. Please wait a moment before trying again.';
+        setErrorMessage(msg);
+        AlertDialog.fire({
+          title: 'Too Many Requests',
+          text: msg,
+        });
+      } else if (cleanMessage && cleanMessage.toLowerCase().includes('deactivated')) {
         setErrorMessage(cleanMessage);
         AlertDialog.fire({
           title: 'Account Suspended',
           text: cleanMessage,
         });
+      } else if (cleanMessage && cleanMessage.toLowerCase().includes('locked')) {
+        setErrorMessage(cleanMessage);
+        AlertDialog.fire({
+          title: 'Account Locked',
+          text: cleanMessage,
+        });
+      } else if (cleanMessage && cleanMessage.toLowerCase().includes('remaining')) {
+        setErrorMessage(cleanMessage);
       } else {
-        setErrorMessage('Invalid username or password');
+        setErrorMessage(cleanMessage || 'Invalid username or password');
       }
     } finally {
       setIsSubmitting(false);

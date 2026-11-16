@@ -26,6 +26,8 @@ public class DataSeeder implements CommandLineRunner {
             jdbcTemplate.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;");
             jdbcTemplate.execute("ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('ADMIN', 'STOCK', 'USER'));");
             jdbcTemplate.execute("ALTER TABLE users DROP COLUMN IF EXISTS address;");
+            jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts integer DEFAULT 0;");
+            jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS lockout_until timestamp;");
             jdbcTemplate.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS subtotal numeric(12,2);");
             jdbcTemplate.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_cost numeric(12,2) DEFAULT 0.00;");
             jdbcTemplate.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_amount numeric(12,2) DEFAULT 0.00;");

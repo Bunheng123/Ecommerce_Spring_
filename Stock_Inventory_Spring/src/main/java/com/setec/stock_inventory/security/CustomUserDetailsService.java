@@ -31,7 +31,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 user.isActive(),
                 true,
                 true,
-                true,
+                !user.isAccountLocked(),
                 Collections.singletonList(authority)
         );
     }
